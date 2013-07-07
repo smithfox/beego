@@ -189,7 +189,7 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 	defer func() {
 		if err := recover(); err != nil {
 			errstr := fmt.Sprint(err)
-			if handler, ok := ErrorMaps[errstr]; ok {
+			if handler, ok := ErrorMaps[errstr]; ok && ErrorsShow {
 				handler(rw, r)
 			} else {
 				if !RecoverPanic {
@@ -257,6 +257,7 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 	}
 
 	requestPath := r.URL.Path
+
 	r.ParseMultipartForm(MaxMemory)
 
 	//user defined Handler
