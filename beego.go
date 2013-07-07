@@ -10,9 +10,10 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"time"
 )
 
-const VERSION = "0.7.0"
+const VERSION = "0.7.2"
 
 var (
 	BeeApp        *App
@@ -40,6 +41,9 @@ var (
 	MaxMemory            int64
 	EnableGzip           bool // enable gzip
 	DirectoryIndex       bool //ebable DirectoryIndex default is false
+	EnbaleHotUpdate      bool //enable HotUpdate default is false
+	HttpServerTimeOut    int64
+	ErrorsShow           bool
 )
 
 func init() {
@@ -66,6 +70,8 @@ func init() {
 	EnableGzip = false
 	StaticDir["/static"] = "static"
 	AppConfigPath = path.Join(AppPath, "conf", "app.conf")
+	HttpServerTimeOut = 0
+	ErrorsShow = true
 	ParseConfig()
 }
 
@@ -93,16 +99,31 @@ func (app *App) Run() {
 		}
 		err = fcgi.Serve(l, app.Handlers)
 	} else {
-		server := &http.Server{Handler: app.Handlers}
-		laddr, err := net.ResolveTCPAddr("tcp", addr)
-		if nil != err {
-			BeeLogger.Fatal("ResolveTCPAddr:", err)
+		if EnbaleHotUpdate {
+			server := &http.Server{
+				Handler:      app.Handlers,
+				ReadTimeout:  time.Duration(HttpServerTimeOut) * time.Second,
+				WriteTimeout: time.Duration(HttpServerTimeOut) * time.Second,
+			}
+			laddr, err := net.ResolveTCPAddr("tcp", addr)
+			if nil != err {
+				BeeLogger.Fatal("ResolveTCPAddr:", err)
+			}
+			l, err = GetInitListner(laddr)
+			theStoppable = newStoppable(l)
+			err = server.Serve(theStoppable)
+			theStoppable.wg.Wait()
+			CloseSelf()
+		} else {
+			s := &http.Server{
+				Addr:         addr,
+				Handler:      app.Handlers,
+				ReadTimeout:  time.Duration(HttpServerTimeOut) * time.Second,
+				WriteTimeout: time.Duration(HttpServerTimeOut) * time.Second,
+			}
+			err = s.ListenAndServe()
 		}
-		l, err = GetInitListner(laddr)
-		theStoppable = newStoppable(l)
-		err = server.Serve(theStoppable)
-		theStoppable.wg.Wait()
-		CloseSelf()
+
 	}
 	if err != nil {
 		BeeLogger.Fatal("ListenAndServe: ", err)
