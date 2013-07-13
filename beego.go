@@ -44,6 +44,8 @@ var (
 	EnbaleHotUpdate      bool //enable HotUpdate default is false
 	HttpServerTimeOut    int64
 	ErrorsShow           bool
+	XSRFKEY              string
+	CopyRequestBody      bool
 )
 
 func init() {
@@ -72,6 +74,7 @@ func init() {
 	AppConfigPath = path.Join(AppPath, "conf", "app.conf")
 	HttpServerTimeOut = 0
 	ErrorsShow = true
+	XSRFKEY = "beegoxsrf"
 	ParseConfig()
 }
 
@@ -178,8 +181,14 @@ func RegisterController(path string, c ControllerInterface) *App {
 	return BeeApp
 }
 
-func Router(path string, c ControllerInterface) *App {
-	BeeApp.Router(path, c)
+func Router(rootpath string, c ControllerInterface) *App {
+	BeeApp.Router(rootpath, c)
+	return BeeApp
+}
+
+func RESTRouter(rootpath string, c ControllerInterface) *App {
+	Router(rootpath, c)
+	Router(path.Join(rootpath, ":objectId"), c)
 	return BeeApp
 }
 
