@@ -2,7 +2,7 @@ package beego
 
 import (
 	"fmt"
-	"github.com/astaxie/beego/session"
+	"github.com/smithfox/beego/session"
 	"html/template"
 	"net"
 	"net/http"
