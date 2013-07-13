@@ -11,7 +11,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"github.com/astaxie/beego/session"
+	"github.com/smithfox/beego/session"
 	"html/template"
 	"io"
 	"io/ioutil"
