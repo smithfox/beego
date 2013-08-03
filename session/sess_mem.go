@@ -113,8 +113,8 @@ func (pder *MemProvider) SessionGC() {
 }
 
 func (pder *MemProvider) SessionUpdate(sid string) error {
-	pder.lock.RLock()
-	defer pder.lock.RUnlock()
+	pder.lock.Lock()
+	defer pder.lock.Unlock()
 	if element, ok := pder.sessions[sid]; ok {
 		element.Value.(*MemSessionStore).timeAccessed = time.Now()
 		pder.list.MoveToFront(element)
