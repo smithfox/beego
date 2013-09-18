@@ -6,6 +6,7 @@ beego is a Go Framework which is inspired from tornado and sinatra.
 
 It is a simply & powerful web framework.
 
+more info [beego.me](http://beego.me)
 
 ## Features
 
@@ -22,11 +23,11 @@ It is a simply & powerful web framework.
 
 ## Documentation
 
-[English](https://github.com/astaxie/beego/tree/master/docs/en)
+[English](http://beego.me/docs/Overview_Introduction?lang=en&q=)
 
 [API](http://gowalker.org/github.com/astaxie/beego)
 
-[中文文档](https://github.com/astaxie/beego/tree/master/docs/zh)
+[中文文档](http://beego.me/docs/Overview_Introduction?lang=zh&q=)
 
 
 ## LICENSE

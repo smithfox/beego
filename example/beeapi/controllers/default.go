@@ -6,19 +6,19 @@ import (
 	"github.com/astaxie/beego/example/beeapi/models"
 )
 
-type ObejctController struct {
+type ObjectController struct {
 	beego.Controller
 }
 
-func (this *ObejctController) Post() {
+func (this *ObjectController) Post() {
 	var ob models.Object
-	json.Unmarshal(this.Ctx.RequestBody, &ob)
+	json.Unmarshal(this.Ctx.Input.RequestBody, &ob)
 	objectid := models.AddOne(ob)
-	this.Data["json"] = "{\"ObjectId\":\"" + objectid + "\"}"
+	this.Data["json"] = map[string]string{"ObjectId": objectid}
 	this.ServeJson()
 }
 
-func (this *ObejctController) Get() {
+func (this *ObjectController) Get() {
 	objectId := this.Ctx.Params[":objectId"]
 	if objectId != "" {
 		ob, err := models.GetOne(objectId)
@@ -34,10 +34,10 @@ func (this *ObejctController) Get() {
 	this.ServeJson()
 }
 
-func (this *ObejctController) Put() {
+func (this *ObjectController) Put() {
 	objectId := this.Ctx.Params[":objectId"]
 	var ob models.Object
-	json.Unmarshal(this.Ctx.RequestBody, &ob)
+	json.Unmarshal(this.Ctx.Input.RequestBody, &ob)
 
 	err := models.Update(objectId, ob.Score)
 	if err != nil {
@@ -48,7 +48,7 @@ func (this *ObejctController) Put() {
 	this.ServeJson()
 }
 
-func (this *ObejctController) Delete() {
+func (this *ObjectController) Delete() {
 	objectId := this.Ctx.Params[":objectId"]
 	models.Delete(objectId)
 	this.Data["json"] = "delete success!"

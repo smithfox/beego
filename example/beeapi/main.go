@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/smithfox/beego"
-	"github.com/smithfox/beego/example/beeapi/controllers"
+	"github.com/astaxie/beego"
+	"github.com/astaxie/beego/example/beeapi/controllers"
 )
 
 //		Objects
@@ -15,6 +15,6 @@ import (
 //	/object/<objectId>	DELETE					Deleting Objects
 
 func main() {
-	beego.RESTRouter("/object", &controllers.ObejctController{})
+	beego.RESTRouter("/object", &controllers.ObjectController{})
 	beego.Run()
 }

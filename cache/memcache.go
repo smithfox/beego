@@ -19,12 +19,16 @@ func (rc *MemcacheCache) Get(key string) interface{} {
 	if rc.c == nil {
 		rc.c = rc.connectInit()
 	}
-	v, _, err := rc.c.Get(key)
+	v, err := rc.c.Get(key)
 	if err != nil {
 		return nil
 	}
 	var contain interface{}
-	contain = v
+	if len(v) > 0 {
+		contain = string(v[0].Value)
+	} else {
+		contain = nil
+	}
 	return contain
 }
 
@@ -51,11 +55,19 @@ func (rc *MemcacheCache) Delete(key string) error {
 	return err
 }
 
+func (rc *MemcacheCache) Incr(key string) error {
+	return errors.New("not support in memcache")
+}
+
+func (rc *MemcacheCache) Decr(key string) error {
+	return errors.New("not support in memcache")
+}
+
 func (rc *MemcacheCache) IsExist(key string) bool {
 	if rc.c == nil {
 		rc.c = rc.connectInit()
 	}
-	v, _, err := rc.c.Get(key)
+	v, err := rc.c.Get(key)
 	if err != nil {
 		return false
 	}
