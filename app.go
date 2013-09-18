@@ -2,7 +2,7 @@ package beego
 
 import (
 	"fmt"
-	"github.com/astaxie/beego/context"
+	"github.com/smithfox/beego/context"
 	"net"
 	"net/http"
 	"net/http/fcgi"

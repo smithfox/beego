@@ -2,8 +2,8 @@ package beego
 
 import (
 	"fmt"
-	beecontext "github.com/astaxie/beego/context"
-	"github.com/astaxie/beego/middleware"
+	beecontext "github.com/smithfox/beego/context"
+	"github.com/smithfox/beego/middleware"
 	"net/http"
 	"net/url"
 	"os"

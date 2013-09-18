@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/astaxie/beego"
-	"github.com/astaxie/beego/example/chat/controllers"
+	"github.com/smithfox/beego"
+	"github.com/smithfox/beego/example/chat/controllers"
 )
 
 func main() {

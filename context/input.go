@@ -2,7 +2,7 @@ package context
 
 import (
 	"bytes"
-	"github.com/astaxie/beego/session"
+	"github.com/smithfox/beego/session"
 	"io/ioutil"
 	"net/http"
 	"strconv"

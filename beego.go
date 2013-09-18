@@ -1,8 +1,8 @@
 package beego
 
 import (
-	"github.com/astaxie/beego/middleware"
-	"github.com/astaxie/beego/session"
+	"github.com/smithfox/beego/middleware"
+	"github.com/smithfox/beego/session"
 	"net/http"
 	"path"
 )

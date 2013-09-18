@@ -1,8 +1,8 @@
 package beego
 
 import (
-	"github.com/astaxie/beego/config"
-	"github.com/astaxie/beego/session"
+	"github.com/smithfox/beego/config"
+	"github.com/smithfox/beego/session"
 	"html/template"
 	"os"
 	"path"
