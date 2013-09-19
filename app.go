@@ -87,7 +87,7 @@ func (app *App) AutoRouter(c ControllerInterface) *App {
 	return app
 }
 
-func (app *App) Filter(pattern, action string, filter FilterFunc) *App {
+func (app *App) AddFilter(pattern, action string, filter FilterFunc) *App {
 	app.Handlers.AddFilter(pattern, action, filter)
 	return app
 }

@@ -313,6 +313,18 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 
 	context.Input.Param = params
 	if p.enableFilter {
+		if l, ok := p.filters["First"]; ok {
+			for _, filterR := range l {
+				filterR.filterFunc(context)
+				if w.started {
+					fmt.Printf("First filter responsewriter.started!!\n")
+					return
+				}
+			}
+		}
+	}
+
+	if p.enableFilter {
 		if l, ok := p.filters["BeforRouter"]; ok {
 			for _, filterR := range l {
 				if filterR.ValidRouter(r.URL.Path) {
@@ -365,18 +377,21 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 	//first find path from the fixrouters to Improve Performance
 	for _, route := range p.fixrouters {
 		n := len(requestPath)
-		if requestPath == route.pattern {
+		m := len(route.pattern)
+		if requestPath == route.pattern || (requestPath[n-1] == '/' && requestPath[:n-1] == route.pattern) || (route.pattern[m-1] == '/' && route.pattern[:m-1] == requestPath) {
 			runrouter = route
 			findrouter = true
 			break
 		}
-		// pattern /admin   url /admin 200  /admin/ 404
-		// pattern /admin/  url /admin 301  /admin/ 200
-		if requestPath[n-1] != '/' && len(route.pattern) == n+1 &&
-			route.pattern[n] == '/' && route.pattern[:n-1] == requestPath {
-			http.Redirect(w, r, requestPath+"/", 301)
-			return
-		}
+		/*
+			// pattern /admin   url /admin 200  /admin/ 404
+			// pattern /admin/  url /admin 301  /admin/ 200
+			if requestPath[n-1] != '/' && len(route.pattern) == n+1 &&
+				route.pattern[n] == '/' && route.pattern[:n-1] == requestPath {
+				http.Redirect(w, r, requestPath+"/", 301)
+				return
+			}
+		*/
 	}
 
 	//find regex's router

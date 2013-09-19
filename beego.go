@@ -46,12 +46,13 @@ func DelStaticPath(url string) *App {
 }
 
 //action has four values:
+//First
 //BeforRouter
 //AfterStatic
 //BeforExec
 //AfterExec
 func AddFilter(pattern, action string, filter FilterFunc) *App {
-	BeeApp.Filter(pattern, action, filter)
+	BeeApp.AddFilter(pattern, action, filter)
 	return BeeApp
 }
 
@@ -71,14 +72,14 @@ func Run() {
 		go GlobalSessions.GC()
 	}
 
-	if AutoRender {
-		err := BuildTemplate(ViewsPath)
-		if err != nil {
-			if RunMode == "dev" {
-				Warn(err)
-			}
+	//if AutoRender {
+	err := BuildTemplate(ViewsPath)
+	if err != nil {
+		if RunMode == "dev" {
+			Warn(err)
 		}
 	}
+	//}
 
 	middleware.VERSION = VERSION
 	middleware.AppName = AppName
