@@ -120,7 +120,8 @@ func (c *YAMLConfigContainer) DIY(key string) (v interface{}, err error) {
 	}
 	return nil, errors.New("not exist key")
 }
-
+/*
 func init() {
 	Register("yaml", &YAMLConfig{})
 }
+*/
