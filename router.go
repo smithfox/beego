@@ -4,6 +4,7 @@ import (
 	"fmt"
 	beecontext "github.com/smithfox/beego/context"
 	"github.com/smithfox/beego/middleware"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -306,12 +307,14 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 		context.Output = beecontext.NewOutput(rw)
 	}
 
+	if SessionOn {
+		context.Input.CruSession = GlobalSessions.SessionStart(w, r)
+	}
 	var runrouter *controllerInfo
 	var findrouter bool
 
 	params := make(map[string]string)
 
-	context.Input.Param = params
 	if p.enableFilter {
 		if l, ok := p.filters["First"]; ok {
 			for _, filterR := range l {
@@ -329,6 +332,9 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 			for _, filterR := range l {
 				if filterR.ValidRouter(r.URL.Path) {
 					filterR.filterFunc(context)
+					if w.started {
+						return
+					}
 				}
 			}
 		}
@@ -337,14 +343,14 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 	//static file server
 	for prefix, staticDir := range StaticDir {
 		if r.URL.Path == "/favicon.ico" {
-			file := staticDir + r.URL.Path
-			http.ServeFile(w, r, file)
+			filepath := staticDir + r.URL.Path
+			http.ServeFile(w, r, filepath)
 			w.started = true
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, prefix) {
-			file := staticDir + r.URL.Path[len(prefix):]
-			finfo, err := os.Stat(file)
+			filepath := staticDir + r.URL.Path[len(prefix):]
+			finfo, err := os.Stat(filepath)
 			if err != nil {
 				return
 			}
@@ -353,7 +359,44 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 				middleware.Exception("403", rw, r, "403 Forbidden")
 				return
 			}
-			http.ServeFile(w, r, file)
+
+			//进入静态文件zip+cache逻辑
+			//1. 采用了最高压缩率
+			//2. 将zip后的内容cache, 极大降低 io 和 cpu。 用内存换时间, 要评估好内存大小
+			//   mem := 每个静态文件(原始大小+最高压缩gzip后大小+deflate压缩后大小) 之和
+			//3. 支持Last-Modified
+			//4. 文件改动后, 能更新Last-Modified和cache
+			if strings.HasSuffix(filepath, ".css") || strings.HasSuffix(filepath, ".js") || strings.HasSuffix(filepath, ".mustache") { //FIXME: hardcode MemZipStaticFile filter了
+
+				if EnableGzip {
+					w.contentEncoding = GetAcceptEncodingZip(r)
+				}
+
+				//如果w.contentEncoding是空, 不压缩
+				memzipfile, err := OpenMemZipFile(filepath, w.contentEncoding)
+				if err != nil {
+					return
+				}
+
+				//初始化response head content-encoding, content-length
+				w.InitHeadContent(finfo.Size())
+
+				//gzip一个未知的mimetype的内容后,如果不明确设置content-type
+				//go会根据内容的头几个字节，自动判断为application/x-gzip
+				//这导致浏览器认为是一个zip文件下载。
+				//两种方式解决这个问题:
+				//1. 调用 mime.AddExtensionType(ext, typ string), 明确告诉go你自己的mimetype
+				//   例如 mime.AddExtensionType(".mustache", "text/html; charset=utf-8")
+				//2. 在此处(调用ServeContent之前)hard code, beego可以考虑抽一个接口
+				if strings.HasSuffix(filepath, ".mustache") {
+					w.Header().Set("Content-Type", "text/html; charset=utf-8") //FIXME: hardcode
+				}
+
+				http.ServeContent(w, r, filepath, finfo.ModTime(), memzipfile)
+			} else { //其他静态文件直接读文件
+				http.ServeFile(w, r, filepath)
+			}
+
 			w.started = true
 			return
 		}
@@ -364,6 +407,9 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 			for _, filterR := range l {
 				if filterR.ValidRouter(r.URL.Path) {
 					filterR.filterFunc(context)
+					if w.started {
+						return
+					}
 				}
 			}
 		}
@@ -427,6 +473,7 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 			break
 		}
 	}
+	context.Input.Param = params
 
 	if runrouter != nil {
 		if r.Method == "POST" {
@@ -438,6 +485,9 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 				for _, filterR := range l {
 					if filterR.ValidRouter(r.URL.Path) {
 						filterR.filterFunc(context)
+						if w.started {
+							return
+						}
 					}
 				}
 			}
@@ -446,18 +496,16 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 		vc := reflect.New(runrouter.controllerType)
 
 		//call the controller init function
-		init := vc.MethodByName("Init")
-		in := make([]reflect.Value, 2)
+		method := vc.MethodByName("Init")
+		in := make([]reflect.Value, 3)
 		in[0] = reflect.ValueOf(context)
 		in[1] = reflect.ValueOf(runrouter.controllerType.Name())
-		init.Call(in)
-		//call prepare function
-		in = make([]reflect.Value, 0)
-		method := vc.MethodByName("Prepare")
+		in[2] = reflect.ValueOf(vc.Interface())
 		method.Call(in)
 
 		//if XSRF is Enable then check cookie where there has any cookie in the  request's cookie _csrf
 		if EnableXSRF {
+			in = make([]reflect.Value, 0)
 			method = vc.MethodByName("XsrfToken")
 			method.Call(in)
 			if r.Method == "POST" || r.Method == "DELETE" || r.Method == "PUT" ||
@@ -466,6 +514,10 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 				method.Call(in)
 			}
 		}
+		//call prepare function
+		in = make([]reflect.Value, 0)
+		method = vc.MethodByName("Prepare")
+		method.Call(in)
 
 		//if response has written,yes don't run next
 		if !w.started {
@@ -587,6 +639,9 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 				for _, filterR := range l {
 					if filterR.ValidRouter(r.URL.Path) {
 						filterR.filterFunc(context)
+						if w.started {
+							return
+						}
 					}
 				}
 			}
@@ -599,6 +654,14 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 
 	if p.enableAuto {
 		if !findrouter {
+			lastindex := strings.LastIndex(requestPath, "/")
+			lastsub := requestPath[lastindex+1:]
+			if subindex := strings.LastIndex(lastsub, "."); subindex != -1 {
+				context.Input.Param[":ext"] = lastsub[subindex+1:]
+				r.URL.Query().Add(":ext", lastsub[subindex+1:])
+				r.URL.RawQuery = r.URL.Query().Encode()
+				requestPath = requestPath[:len(requestPath)-len(lastsub[subindex:])]
+			}
 			for cName, methodmap := range p.autoRouter {
 
 				if strings.ToLower(requestPath) == "/"+cName {
@@ -621,6 +684,9 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 									for _, filterR := range l {
 										if filterR.ValidRouter(r.URL.Path) {
 											filterR.filterFunc(context)
+											if w.started {
+												return
+											}
 										}
 									}
 								}
@@ -638,9 +704,10 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 
 							//call the controller init function
 							init := vc.MethodByName("Init")
-							in := make([]reflect.Value, 2)
+							in := make([]reflect.Value, 3)
 							in[0] = reflect.ValueOf(context)
 							in[1] = reflect.ValueOf(controllerType.Name())
+							in[2] = reflect.ValueOf(vc.Interface())
 							init.Call(in)
 							//call prepare function
 							in = make([]reflect.Value, 0)
@@ -672,6 +739,9 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 									for _, filterR := range l {
 										if filterR.ValidRouter(r.URL.Path) {
 											filterR.filterFunc(context)
+											if w.started {
+												return
+											}
 										}
 									}
 								}
@@ -698,14 +768,25 @@ Last:
 //responseWriter is a wrapper for the http.ResponseWriter
 //started set to true if response was written to then don't execute other handler
 type responseWriter struct {
-	writer  http.ResponseWriter
-	started bool
-	status  int
+	writer          http.ResponseWriter
+	started         bool
+	status          int
+	contentEncoding string
+	zwriter         io.Writer
 }
 
 // Header returns the header map that will be sent by WriteHeader.
 func (w *responseWriter) Header() http.Header {
 	return w.writer.Header()
+}
+
+func (w *responseWriter) InitHeadContent(contentlength int64) {
+	if w.contentEncoding == "gzip" {
+		w.Header().Set("Content-Encoding", "gzip")
+	} else if w.contentEncoding == "deflate" {
+		w.Header().Set("Content-Encoding", "deflate")
+	}
+	w.Header().Set("Content-Length", strconv.FormatInt(contentlength, 10))
 }
 
 // Write writes the data to the connection as part of an HTTP reply,

@@ -1,0 +1,58 @@
+package beego
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+var a string = `<a>{{template "b"}}</a>`
+
+var b string = `{{define "b"}}
+<b>{{template "c"}}</b>
+{{end}}`
+
+var c string = `{{define "c"}}
+<c>CCCC</c>
+{{end}}`
+
+func TestTemplate(t *testing.T) {
+	dir := "_beeTmp"
+	files := []string{
+		"a.tpl",
+		"b.tpl",
+		"c.tpl",
+	}
+	if err := os.MkdirAll(dir, 0777); err != nil {
+		t.Fatal(err)
+	}
+	for k, name := range files {
+		os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0777)
+		if f, err := os.Create(filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		} else {
+			if k == 0 {
+				f.WriteString(a)
+			} else if k == 1 {
+				f.WriteString(b)
+			} else if k == 2 {
+				f.WriteString(c)
+			}
+
+			f.Close()
+		}
+	}
+	if err := BuildTemplate(dir); err != nil {
+		t.Fatal(err)
+	}
+	if len(BeeTemplates) != 3 {
+		t.Fatalf("should be 3 but got %v", len(BeeTemplates))
+	}
+	if err := BeeTemplates["a.tpl"].ExecuteTemplate(os.Stdout, "a.tpl", nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range files {
+		os.RemoveAll(filepath.Join(dir, name))
+	}
+	os.RemoveAll(dir)
+}

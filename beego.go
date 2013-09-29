@@ -68,18 +68,16 @@ func Run() {
 	}
 
 	if SessionOn {
-		GlobalSessions, _ = session.NewManager(SessionProvider, SessionName, SessionGCMaxLifetime, SessionSavePath)
+		GlobalSessions, _ = session.NewManager(SessionProvider, SessionName, SessionGCMaxLifetime, SessionSavePath, HttpTLS)
 		go GlobalSessions.GC()
 	}
 
-	//if AutoRender {
 	err := BuildTemplate(ViewsPath)
 	if err != nil {
 		if RunMode == "dev" {
 			Warn(err)
 		}
 	}
-	//}
 
 	middleware.VERSION = VERSION
 	middleware.AppName = AppName
