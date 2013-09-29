@@ -4,7 +4,6 @@ import (
 	"fmt"
 	beecontext "github.com/smithfox/beego/context"
 	"github.com/smithfox/beego/middleware"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -772,7 +771,6 @@ type responseWriter struct {
 	started         bool
 	status          int
 	contentEncoding string
-	zwriter         io.Writer
 }
 
 // Header returns the header map that will be sent by WriteHeader.
