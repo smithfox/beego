@@ -394,7 +394,7 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 
 				http.ServeContent(w, r, filepath, finfo.ModTime(), memzipfile)
 			} else { //其他静态文件直接读文件
-				if strings.HasPrefix(filepath, "/game/") {
+				if strings.Contains(filepath, "/game/") {
 					w.Header().Set("Cache-Control", "max-age=2592000")
 				}
 				http.ServeFile(w, r, filepath)
