@@ -128,7 +128,7 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		//cookie.Expires = time.Now().Add(time.Duration(manager.maxlifetime) * time.Second)
 		http.SetCookie(w, cookie)
 		r.AddCookie(cookie)
-		fmt.Printf("beego: cookie is empty, create new sid=%s, session=%p, r=%p\n", sid, session, r)
+		//fmt.Printf("beego: cookie is empty, create new sid=%s, session=%p, r=%p\n", sid, session, r)
 	} else {
 		//cookie.Expires = time.Now().Add(time.Duration(manager.maxlifetime) * time.Second)
 		cookie.HttpOnly = true
@@ -139,7 +139,7 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		http.SetCookie(w, cookie)
 		sid, _ := url.QueryUnescape(cookie.Value)
 		session, _ = manager.provider.SessionRead(sid)
-		fmt.Printf("beego: cookie sid=%s, get session=%p,r=%p\n", sid, session, r)
+		//fmt.Printf("beego: cookie sid=%s, get session=%p,r=%p\n", sid, session, r)
 	}
 	return
 }
@@ -227,7 +227,7 @@ func (manager *Manager) sessionId(r *http.Request) (sid string) {
 	sig := fmt.Sprintf("%s%d%s", r.RemoteAddr, time.Now().UnixNano(), bs)
 	if manager.hashfunc == "md5" {
 		h := md5.New()
-		h.Write([]byte(bs))
+		h.Write([]byte(sig))
 		sid = fmt.Sprintf("%s", hex.EncodeToString(h.Sum(nil)))
 	} else if manager.hashfunc == "sha1" {
 		h := hmac.New(sha1.New, []byte(manager.hashkey))
