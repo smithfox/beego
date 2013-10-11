@@ -87,6 +87,25 @@ func (pder *MemProvider) SessionRead(sid string) (SessionStore, error) {
 	return nil, nil
 }
 
+func (pder *MemProvider) SessionNewIfNo(sid string, createSidFunc CreateSidFunc) (SessionStore, error) {
+	pder.lock.RLock()
+	if element, ok := pder.sessions[sid]; ok {
+		go pder.SessionUpdate(sid)
+		pder.lock.RUnlock()
+		return element.Value.(*MemSessionStore), nil
+	} else {
+		pder.lock.RUnlock()
+		pder.lock.Lock()
+		newsid := createSidFunc()
+		newsess := &MemSessionStore{sid: newsid, timeAccessed: time.Now(), value: make(map[interface{}]interface{})}
+		element := pder.list.PushBack(newsess)
+		pder.sessions[newsid] = element
+		pder.lock.Unlock()
+		return newsess, nil
+	}
+	return nil, nil
+}
+
 func (pder *MemProvider) SessionRegenerate(oldsid, sid string) (SessionStore, error) {
 	pder.lock.RLock()
 	if element, ok := pder.sessions[oldsid]; ok {

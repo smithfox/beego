@@ -121,6 +121,11 @@ func (fp *FileProvider) SessionRead(sid string) (SessionStore, error) {
 	return ss, nil
 }
 
+//FIXME: xxxx
+func (fp *FileProvider) SessionNewIfNo(sid string, createSidFunc CreateSidFunc) (SessionStore, error) {
+	return nil, nil
+}
+
 func (fp *FileProvider) SessionDestroy(sid string) error {
 	os.Remove(path.Join(fp.savePath))
 	return nil

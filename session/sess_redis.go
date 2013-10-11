@@ -104,6 +104,11 @@ func (rp *RedisProvider) SessionRead(sid string) (SessionStore, error) {
 	return rs, nil
 }
 
+//FIXME: xxxx
+func (rp *RedisProvider) SessionNewIfNo(sid string, createSidFunc CreateSidFunc) (SessionStore, error) {
+	return nil, nil
+}
+
 func (rp *RedisProvider) SessionRegenerate(oldsid, sid string) (SessionStore, error) {
 	c := rp.connectInit()
 	if str, err := redis.String(c.Do("HGET", oldsid, oldsid)); err != nil || str == "" {

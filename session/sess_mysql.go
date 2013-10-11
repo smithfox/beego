@@ -116,6 +116,11 @@ func (mp *MysqlProvider) SessionRead(sid string) (SessionStore, error) {
 	return rs, nil
 }
 
+//FIXME: xxxx
+func (mp *MysqlProvider) SessionNewIfNo(sid string, createSidFunc CreateSidFunc) (SessionStore, error) {
+	return nil, nil
+}
+
 func (mp *MysqlProvider) SessionRegenerate(oldsid, sid string) (SessionStore, error) {
 	c := mp.connectInit()
 	row := c.QueryRow("select session_data from session where session_key=?", oldsid)

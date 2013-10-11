@@ -23,9 +23,12 @@ type SessionStore interface {
 	Flush() error                     //delete all data
 }
 
+type CreateSidFunc func() string
+
 type Provider interface {
 	SessionInit(maxlifetime int64, savePath string) error
 	SessionRead(sid string) (SessionStore, error)
+	SessionNewIfNo(sid string, createSidFunc CreateSidFunc) (SessionStore, error)
 	SessionRegenerate(oldsid, sid string) (SessionStore, error)
 	SessionDestroy(sid string) error
 	SessionGC()
@@ -70,7 +73,7 @@ func NewManager(provideName, cookieName string, maxlifetime int64, savePath stri
 	if len(options) > 1 {
 		hashfunc = options[1].(string)
 	}
-	hashkey := "beegosessionkey"
+	hashkey := "changethedefaultkey"
 	if len(options) > 2 {
 		hashkey = options[2].(string)
 	}
@@ -131,15 +134,21 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		//fmt.Printf("beego: cookie is empty, create new sid=%s, session=%p, r=%p\n", sid, session, r)
 	} else {
 		//cookie.Expires = time.Now().Add(time.Duration(manager.maxlifetime) * time.Second)
+		sid, _ := url.QueryUnescape(cookie.Value)
+
+		session, _ = manager.provider.SessionNewIfNo(sid, func() string { sid = manager.sessionId(r); return sid })
+
 		cookie.HttpOnly = true
 		cookie.Path = "/"
+		cookie.Value = url.QueryEscape(sid)
 		if maxage >= 0 {
 			cookie.MaxAge = maxage
 		}
+
 		http.SetCookie(w, cookie)
-		sid, _ := url.QueryUnescape(cookie.Value)
-		session, _ = manager.provider.SessionRead(sid)
-		//fmt.Printf("beego: cookie sid=%s, get session=%p,r=%p\n", sid, session, r)
+
+		//sid, _ := url.QueryUnescape(cookie.Value)
+		//session, _ = manager.provider.SessionRead(sid)
 	}
 	return
 }
