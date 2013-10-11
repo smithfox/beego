@@ -128,6 +128,7 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		//cookie.Expires = time.Now().Add(time.Duration(manager.maxlifetime) * time.Second)
 		http.SetCookie(w, cookie)
 		r.AddCookie(cookie)
+		fmt.Printf("beego: cookie is empty, create new sid=%s, session=%p, r=%p\n", sid, session, r)
 	} else {
 		//cookie.Expires = time.Now().Add(time.Duration(manager.maxlifetime) * time.Second)
 		cookie.HttpOnly = true
@@ -138,6 +139,7 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		http.SetCookie(w, cookie)
 		sid, _ := url.QueryUnescape(cookie.Value)
 		session, _ = manager.provider.SessionRead(sid)
+		fmt.Printf("beego: cookie sid=%s, get session=%p,r=%p\n", sid, session, r)
 	}
 	return
 }
