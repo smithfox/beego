@@ -1,18 +1,22 @@
 package session
 
 import (
-	"crypto/hmac"
+	//"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
-	"crypto/sha1"
-	"encoding/base64"
+	//"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"io"
+	mrand "math/rand"
 	"net/http"
 	"net/url"
 	"time"
 )
+
+func init() {
+	mrand.Seed(time.Now().UnixNano())
+}
 
 type SessionStore interface {
 	Set(key, value interface{}) error //set session value
@@ -228,24 +232,35 @@ func (manager *Manager) SessionRegenerateId(w http.ResponseWriter, r *http.Reque
 //remote_addr cruunixnano randdata
 
 func (manager *Manager) sessionId(r *http.Request) (sid string) {
-	b := make([]byte, 24)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+	randbb := make([]byte, 8)
+	if _, err := io.ReadFull(rand.Reader, randbb); err != nil {
 		return ""
 	}
-	bs := base64.URLEncoding.EncodeToString(b)
-	sig := fmt.Sprintf("%s%d%s", r.RemoteAddr, time.Now().UnixNano(), bs)
-	if manager.hashfunc == "md5" {
-		h := md5.New()
-		h.Write([]byte(sig))
-		sid = fmt.Sprintf("%s", hex.EncodeToString(h.Sum(nil)))
-	} else if manager.hashfunc == "sha1" {
-		h := hmac.New(sha1.New, []byte(manager.hashkey))
-		fmt.Fprintf(h, "%s", sig)
-		sid = fmt.Sprintf("%s", hex.EncodeToString(h.Sum(nil)))
-	} else {
-		h := hmac.New(sha1.New, []byte(manager.hashkey))
-		fmt.Fprintf(h, "%s", sig)
-		sid = fmt.Sprintf("%s", hex.EncodeToString(h.Sum(nil)))
-	}
+
+	sig := fmt.Sprintf("%s%d", r.RemoteAddr, time.Now().UnixNano())
+	h := md5.New()
+	h.Write([]byte(sig))
+	h.Write(randbb)
+	sid = hex.EncodeToString(h.Sum(nil))
+
+	//怀疑hmac.sha1容易conflict
+	/*
+		if manager.hashfunc == "md5" {
+			h := md5.New()
+			h.Write([]byte(sig))
+			h.Write(randbb)
+			sid = hex.EncodeToString(h.Sum(nil))
+		} else if manager.hashfunc == "sha1" {
+			h := hmac.New(sha1.New, []byte(manager.hashkey))
+			h.Write([]byte(sig))
+			h.Write(randbb)
+			sid = hex.EncodeToString(h.Sum(nil))
+		} else {
+			h := hmac.New(sha1.New, []byte(manager.hashkey))
+			h.Write([]byte(sig))
+			h.Write(randbb)
+			sid = hex.EncodeToString(h.Sum(nil))
+		}
+	*/
 	return
 }

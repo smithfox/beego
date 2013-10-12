@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+//return false means started=true, need not continue
+type RawHttpFilterFunc func(http.ResponseWriter, *http.Request) bool
+
 type FilterFunc func(*context.Context)
 
 type App struct {
@@ -89,6 +92,11 @@ func (app *App) AutoRouter(c ControllerInterface) *App {
 
 func (app *App) AddFilter(pattern, action string, filter FilterFunc) *App {
 	app.Handlers.AddFilter(pattern, action, filter)
+	return app
+}
+
+func (app *App) SetRawFilter(rawfilter RawHttpFilterFunc) *App {
+	app.Handlers.SetRawFilter(rawfilter)
 	return app
 }
 

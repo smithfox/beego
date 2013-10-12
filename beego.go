@@ -56,6 +56,11 @@ func AddFilter(pattern, action string, filter FilterFunc) *App {
 	return BeeApp
 }
 
+func SetRawFilter(rawfilter RawHttpFilterFunc) *App {
+	BeeApp.SetRawFilter(rawfilter)
+	return BeeApp
+}
+
 func Run() {
 	//if AppConfigPath not In the conf/app.conf reParse config
 	if AppConfigPath != path.Join(AppPath, "conf", "app.conf") {

@@ -28,6 +28,7 @@ type controllerInfo struct {
 type ControllerRegistor struct {
 	routers      []*controllerInfo
 	fixrouters   []*controllerInfo
+	rawfilter    RawHttpFilterFunc
 	enableFilter bool
 	filters      map[string][]*FilterRouter
 	enableAuto   bool
@@ -259,6 +260,10 @@ func (p *ControllerRegistor) AddFilter(pattern, action string, filter FilterFunc
 	p.filters[action] = append(p.filters[action], mr)
 }
 
+func (p *ControllerRegistor) SetRawFilter(rawfilter RawHttpFilterFunc) {
+	p.rawfilter = rawfilter
+}
+
 // AutoRoute
 func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	defer func() {
@@ -291,7 +296,14 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 		}
 	}()
 
+	if p.rawfilter != nil {
+		if p.rawfilter(rw, r) {
+			return
+		}
+	}
+
 	w := &responseWriter{writer: rw}
+
 	w.Header().Set("Server", "beegoServer")
 	context := &beecontext.Context{
 		ResponseWriter: w,
@@ -314,18 +326,6 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 	var findrouter bool
 
 	params := make(map[string]string)
-
-	if p.enableFilter {
-		if l, ok := p.filters["First"]; ok {
-			for _, filterR := range l {
-				filterR.filterFunc(context)
-				if w.started {
-					fmt.Printf("First filter responsewriter.started!!\n")
-					return
-				}
-			}
-		}
-	}
 
 	if p.enableFilter {
 		if l, ok := p.filters["BeforRouter"]; ok {
