@@ -137,7 +137,7 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		session, _ = manager.provider.SessionRead(sid)
 
 		cookie = &http.Cookie{Name: manager.cookieName,
-			Value:    url.QueryEscape(sid),
+			Value:    url.QueryEscape(session.SessionID()),
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   manager.secure}
@@ -152,18 +152,25 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		//cookie.Expires = time.Now().Add(time.Duration(manager.maxlifetime) * time.Second)
 		sessionchanged := false
 
-		sid, _ := url.QueryUnescape(cookie.Value)
+		oldsid, _ := url.QueryUnescape(cookie.Value)
+		var newsid string = ""
 
-		session, _ = manager.provider.SessionNewIfNo(sid, func() string { sid = manager.sessionId(r); return sid })
+		session, _ = manager.provider.SessionNewIfNo(oldsid, func() string { newsid = manager.sessionId(r); return newsid })
 
 		cookie.HttpOnly = true
 		cookie.Path = "/"
-		cookie.Value = url.QueryEscape(sid)
+
+		newescapesid := url.QueryEscape(session.SessionID())
+		if cookie.Value != newescapesid {
+			cookie.Value = newescapesid
+			sessionchanged = true
+		}
+
 		if manager.maxage >= 0 {
 			cookie.MaxAge = manager.maxage
 		}
 
-		if sessionchanged { //session 设置发生变化了才重新设置, 当前只考虑 value, 而value在此处是不会变化的
+		if sessionchanged {
 			http.SetCookie(w, cookie)
 		}
 	}
@@ -222,7 +229,7 @@ func (manager *Manager) sessionId(r *http.Request) (sid string) {
 	manager.lock.Lock()
 	defer manager.lock.Unlock()
 
-	randbb := make([]byte, 8)
+	randbb := make([]byte, 12)
 	if _, err := io.ReadFull(rand.Reader, randbb); err != nil {
 		return ""
 	}
