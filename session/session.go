@@ -137,7 +137,7 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		session, _ = manager.provider.SessionRead(sid)
 
 		cookie = &http.Cookie{Name: manager.cookieName,
-			Value:    url.QueryEscape(session.SessionID()),
+			Value:    session.SessionID(),
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   manager.secure}
@@ -152,7 +152,7 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		//cookie.Expires = time.Now().Add(time.Duration(manager.maxlifetime) * time.Second)
 		sessionchanged := false
 
-		oldsid, _ := url.QueryUnescape(cookie.Value)
+		oldsid := cookie.Value
 		var newsid string = ""
 
 		session, _ = manager.provider.SessionNewIfNo(oldsid, func() string { newsid = manager.sessionId(r); return newsid })
@@ -160,8 +160,8 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		cookie.HttpOnly = true
 		cookie.Path = "/"
 
-		newescapesid := url.QueryEscape(session.SessionID())
-		if cookie.Value != newescapesid {
+		newescapesid := session.SessionID()
+		if oldsid != newescapesid {
 			cookie.Value = newescapesid
 			sessionchanged = true
 		}
@@ -203,15 +203,15 @@ func (manager *Manager) SessionRegenerateId(w http.ResponseWriter, r *http.Reque
 		session, _ = manager.provider.SessionRead(sid)
 
 		cookie = &http.Cookie{Name: manager.cookieName,
-			Value:    url.QueryEscape(sid),
+			Value:    sid,
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   manager.secure,
 		}
 	} else {
-		oldsid, _ := url.QueryUnescape(cookie.Value)
+		oldsid := cookie.Value
 		session, _ = manager.provider.SessionRegenerate(oldsid, sid)
-		cookie.Value = url.QueryEscape(sid)
+		cookie.Value = sid
 		cookie.HttpOnly = true
 		cookie.Path = "/"
 	}
@@ -225,7 +225,7 @@ func (manager *Manager) SessionRegenerateId(w http.ResponseWriter, r *http.Reque
 
 //remote_addr cruunixnano randdata
 
-func (manager *Manager) sessionId(r *http.Request) (sid string) {
+func (manager *Manager) sessionId(r *http.Request) string {
 	manager.lock.Lock()
 	defer manager.lock.Unlock()
 
@@ -238,9 +238,8 @@ func (manager *Manager) sessionId(r *http.Request) (sid string) {
 	h := md5.New()
 	h.Write([]byte(sig))
 	h.Write(randbb)
-	sid = hex.EncodeToString(h.Sum(nil))
+	return url.QueryEscape(hex.EncodeToString(h.Sum(nil)))
 
-	//怀疑hmac.sha1容易conflict
 	/*
 		if manager.hashfunc == "md5" {
 			h := md5.New()
@@ -259,5 +258,4 @@ func (manager *Manager) sessionId(r *http.Request) (sid string) {
 			sid = hex.EncodeToString(h.Sum(nil))
 		}
 	*/
-	return
 }

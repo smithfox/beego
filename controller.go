@@ -308,6 +308,10 @@ func (c *Controller) DelSession(name interface{}) {
 */
 
 func (c *Controller) DestroySession() {
+	if c.Session != nil {
+		c.Session.SessionRelease()
+		c.Session = nil
+	}
 	GlobalSessions.SessionDestroy(c.Ctx.ResponseWriter, c.Ctx.Request)
 }
 
