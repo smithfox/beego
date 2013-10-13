@@ -2,7 +2,6 @@ package context
 
 import (
 	"bytes"
-	"github.com/smithfox/beego/session"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -10,7 +9,7 @@ import (
 )
 
 type BeegoInput struct {
-	CruSession  session.SessionStore
+	//CruSession  session.SessionStore
 	Param       map[string]string
 	req         *http.Request
 	RequestBody []byte
@@ -152,9 +151,9 @@ func (input *BeegoInput) Cookie(key string) string {
 	return ck.Value
 }
 
-func (input *BeegoInput) Session(key interface{}) interface{} {
-	return input.CruSession.Get(key)
-}
+// func (input *BeegoInput) Session(key interface{}) interface{} {
+// 	return input.CruSession.Get(key)
+// }
 
 func (input *BeegoInput) Body() []byte {
 	requestbody, _ := ioutil.ReadAll(input.req.Body)

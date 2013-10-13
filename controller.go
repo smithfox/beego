@@ -7,8 +7,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/smithfox/beego/session"
 	"github.com/smithfox/beego/context"
+	"github.com/smithfox/beego/session"
 	"html/template"
 	"io"
 	"io/ioutil"
@@ -23,6 +23,7 @@ import (
 
 type Controller struct {
 	Ctx           *context.Context
+	Session       session.SessionStore
 	Data          map[interface{}]interface{}
 	ChildName     string
 	TplNames      string
@@ -30,13 +31,13 @@ type Controller struct {
 	TplExt        string
 	_xsrf_token   string
 	gotofunc      string
-	CruSession    session.SessionStore
 	XSRFExpire    int
 	AppController interface{}
 }
 
 type ControllerInterface interface {
 	Init(ct *context.Context, childName string, app interface{})
+	AssignSession()
 	Prepare()
 	Get()
 	Post()
@@ -59,6 +60,12 @@ func (c *Controller) Init(ctx *context.Context, childName string, app interface{
 	c.AppController = app
 }
 
+func (c *Controller) AssignSession() {
+	if c.Session == nil {
+		c.Session = GlobalSessions.SessionStart(c.Ctx.ResponseWriter, c.Ctx.Request)
+	}
+}
+
 func (c *Controller) Prepare() {
 
 }
@@ -68,8 +75,8 @@ func (c *Controller) Finish() {
 }
 
 func (c *Controller) Destructor() {
-	if c.CruSession != nil {
-		c.CruSession.SessionRelease()
+	if c.Session != nil {
+		c.Session.SessionRelease()
 	}
 }
 
@@ -270,33 +277,35 @@ func (c *Controller) SaveToFile(fromfile, tofile string) error {
 	return nil
 }
 
+/*
 func (c *Controller) StartSession() session.SessionStore {
-	if c.CruSession == nil {
-		c.CruSession = c.Ctx.Input.CruSession
-	}
-	return c.CruSession
+	// if c.Session == nil {
+	// 	c.Session = c.Ctx.Input.CruSession
+	// }
+	return c.Session
 }
 
 func (c *Controller) SetSession(name interface{}, value interface{}) {
-	if c.CruSession == nil {
-		c.StartSession()
-	}
-	c.CruSession.Set(name, value)
+	// if c.Session == nil {
+	// 	c.StartSession()
+	// }
+	c.Session.Set(name, value)
 }
 
 func (c *Controller) GetSession(name interface{}) interface{} {
-	if c.CruSession == nil {
-		c.StartSession()
-	}
-	return c.CruSession.Get(name)
+	// if c.Session == nil {
+	// 	c.StartSession()
+	// }
+	return c.Session.Get(name)
 }
 
 func (c *Controller) DelSession(name interface{}) {
-	if c.CruSession == nil {
-		c.StartSession()
-	}
-	c.CruSession.Delete(name)
+	// if c.Session == nil {
+	// 	c.StartSession()
+	// }
+	c.Session.Delete(name)
 }
+*/
 
 func (c *Controller) DestroySession() {
 	GlobalSessions.SessionDestroy(c.Ctx.ResponseWriter, c.Ctx.Request)
