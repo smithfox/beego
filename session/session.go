@@ -32,9 +32,20 @@ type CreateSidFunc func() string
 
 type Provider interface {
 	SessionInit(maxlifetime int64, savePath string) error
-	SessionRead(sid string) (SessionStore, error)
-	SessionNewIfNo(sid string, createSidFunc CreateSidFunc) (SessionStore, error)
-	SessionRegenerate(oldsid, sid string) (SessionStore, error)
+
+	//not change the last-access-time
+	HasSession(sid string) (bool, error)
+
+	//will update the last-access-time
+	GetSession(sid string) (SessionStore, error)
+
+	//create new session by the sid, if exist will return nil and an error
+	NewSession(sid string) (SessionStore, error)
+
+	//SessionRead(sid string) (SessionStore, error)
+	//SessionNewIfNo(sid string, createSidFunc CreateSidFunc) (SessionStore, error)
+	//SessionRegenerate(oldsid, sid string) (SessionStore, error)
+
 	SessionDestroy(sid string) error
 	SessionGC()
 }
@@ -129,6 +140,48 @@ func NewManager(provideName, cookieName string, maxlifetime int64, savePath stri
 	}, nil
 }
 
+//get SessionId
+func (manager *Manager) GetSessionId(r *http.Request) (string, error) {
+	cookie, err := r.Cookie(manager.cookieName)
+	if err != nil {
+		return "", err
+	}
+
+	return cookie.Value, nil
+}
+
+//get Session By sessionId
+func (manager *Manager) GetSession(sid string) (SessionStore, error) {
+	return manager.provider.GetSession(sid)
+}
+
+//get Session By sessionId
+func (manager *Manager) NewSession(sid string) (SessionStore, error) {
+	return manager.provider.NewSession(sid)
+}
+
+//set session cookie
+func (manager *Manager) SetSessionCookie(sid string, w http.ResponseWriter) {
+	cookie := &http.Cookie{Name: manager.cookieName,
+		Value:    sid,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   manager.secure}
+	if manager.maxage >= 0 {
+		cookie.MaxAge = manager.maxage
+	}
+	//cookie.Expires = time.Now().Add(time.Duration(manager.maxlifetime) * time.Second)
+	http.SetCookie(w, cookie)
+}
+
+//delete session cookie
+func (manager *Manager) DeleteSessionCookie(w http.ResponseWriter) {
+	expiration := time.Now()
+	cookie := http.Cookie{Name: manager.cookieName, Path: "/", HttpOnly: true, Expires: expiration, MaxAge: -1}
+	http.SetCookie(w, &cookie)
+}
+
+/*
 //get Session
 func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session SessionStore) {
 	cookie, err := r.Cookie(manager.cookieName)
@@ -176,68 +229,56 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 	}
 	return
 }
+*/
 
-//Destroy sessionid
-func (manager *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(manager.cookieName)
-	if err != nil || cookie.Value == "" {
-		return
-	} else {
-		manager.provider.SessionDestroy(cookie.Value)
-		expiration := time.Now()
-		cookie := http.Cookie{Name: manager.cookieName, Path: "/", HttpOnly: true, Expires: expiration, MaxAge: -1}
-		http.SetCookie(w, &cookie)
-	}
+func (manager *Manager) DeleteSession(sid string) {
+	manager.provider.SessionDestroy(sid)
 }
+
+// //Destroy sessionid
+// func (manager *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
+// 	cookie, err := r.Cookie(manager.cookieName)
+// 	if err != nil || cookie.Value == "" {
+// 		return
+// 	} else {
+// 		manager.provider.SessionDestroy(cookie.Value)
+// 		expiration := time.Now()
+// 		cookie := http.Cookie{Name: manager.cookieName, Path: "/", HttpOnly: true, Expires: expiration, MaxAge: -1}
+// 		http.SetCookie(w, &cookie)
+// 	}
+// }
 
 func (manager *Manager) GC() {
 	manager.provider.SessionGC()
 	time.AfterFunc(time.Duration(manager.maxlifetime)*time.Second, func() { manager.GC() })
 }
 
-func (manager *Manager) SessionRegenerateId(w http.ResponseWriter, r *http.Request) (session SessionStore) {
-	sid := manager.sessionId(r)
-	cookie, err := r.Cookie(manager.cookieName)
-	if err != nil && cookie.Value == "" {
-		//delete old cookie
-		session, _ = manager.provider.SessionRead(sid)
-
-		cookie = &http.Cookie{Name: manager.cookieName,
-			Value:    sid,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   manager.secure,
-		}
-	} else {
-		oldsid := cookie.Value
-		session, _ = manager.provider.SessionRegenerate(oldsid, sid)
-		cookie.Value = sid
-		cookie.HttpOnly = true
-		cookie.Path = "/"
-	}
-	if manager.maxage >= 0 {
-		cookie.MaxAge = manager.maxage
-	}
-	http.SetCookie(w, cookie)
-	r.AddCookie(cookie)
-	return
-}
-
 //remote_addr cruunixnano randdata
-
-func (manager *Manager) sessionId(r *http.Request) string {
-	manager.lock.Lock()
-	defer manager.lock.Unlock()
-
-	randbb := make([]byte, 12)
+func (manager *Manager) NewSessionId(r *http.Request) string {
+	const randlen int = 12
+	randbb := make([]byte, randlen)
 	if _, err := io.ReadFull(rand.Reader, randbb); err != nil {
 		return ""
 	}
 
 	sig := fmt.Sprintf("%s%d", r.RemoteAddr, time.Now().UnixNano())
+	signbytes := []byte(sig)
+	signlen := len(signbytes)
 	h := md5.New()
-	h.Write([]byte(sig))
-	h.Write(randbb)
+	n, _ := h.Write(signbytes)
+	for n < signlen {
+		fmt.Printf("!!!why1")
+		m, _ := h.Write(signbytes[n:])
+		n += m
+	}
+
+	n, _ = h.Write(randbb)
+	for n < randlen {
+		fmt.Printf("!!!why2")
+		m, _ := h.Write(randbb[n:])
+		n += m
+	}
+
 	return url.QueryEscape(hex.EncodeToString(h.Sum(nil)))
 
 	/*

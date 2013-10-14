@@ -93,6 +93,25 @@ func (rp *RedisProvider) SessionInit(maxlifetime int64, savePath string) error {
 	return nil
 }
 
+//not change the last-access-time
+func (rp *RedisProvider) HasSession(sid string) (bool, error) {
+	//FIXME:xxx
+	return false, nil
+}
+
+//will update the last-access-time
+func (rp *RedisProvider) GetSession(sid string) (SessionStore, error) {
+	//FIXME:xxx
+	return nil, nil
+}
+
+//create new session by the sid, if exist will return nil and an error
+func (rp *RedisProvider) NewSession(sid string) (SessionStore, error) {
+	//FIXME:xxx
+	return nil, nil
+}
+
+/*
 func (rp *RedisProvider) SessionRead(sid string) (SessionStore, error) {
 	c := rp.connectInit()
 	//if str, err := redis.String(c.Do("GET", sid)); err != nil || str == "" {
@@ -118,7 +137,7 @@ func (rp *RedisProvider) SessionRegenerate(oldsid, sid string) (SessionStore, er
 	rs := &RedisSessionStore{c: c, sid: sid}
 	return rs, nil
 }
-
+*/
 func (rp *RedisProvider) SessionDestroy(sid string) error {
 	c := rp.connectInit()
 	c.Do("DEL", sid)

@@ -23,7 +23,6 @@ import (
 
 type Controller struct {
 	Ctx           *context.Context
-	Session       session.SessionStore
 	Data          map[interface{}]interface{}
 	ChildName     string
 	TplNames      string
@@ -37,7 +36,7 @@ type Controller struct {
 
 type ControllerInterface interface {
 	Init(ct *context.Context, childName string, app interface{})
-	AssignSession()
+	GetSessionManager() *session.Manager
 	Prepare()
 	Get()
 	Post()
@@ -60,10 +59,8 @@ func (c *Controller) Init(ctx *context.Context, childName string, app interface{
 	c.AppController = app
 }
 
-func (c *Controller) AssignSession() {
-	if c.Session == nil {
-		c.Session = GlobalSessions.SessionStart(c.Ctx.ResponseWriter, c.Ctx.Request)
-	}
+func (c *Controller) GetSessionManager() *session.Manager {
+	return GlobalSessions
 }
 
 func (c *Controller) Prepare() {
@@ -75,9 +72,9 @@ func (c *Controller) Finish() {
 }
 
 func (c *Controller) Destructor() {
-	if c.Session != nil {
-		c.Session.SessionRelease()
-	}
+	// if c.Session != nil {
+	// 	c.Session.SessionRelease()
+	// }
 }
 
 func (c *Controller) Get() {
@@ -306,14 +303,6 @@ func (c *Controller) DelSession(name interface{}) {
 	c.Session.Delete(name)
 }
 */
-
-func (c *Controller) DestroySession() {
-	if c.Session != nil {
-		c.Session.SessionRelease()
-		c.Session = nil
-	}
-	GlobalSessions.SessionDestroy(c.Ctx.ResponseWriter, c.Ctx.Request)
-}
 
 func (c *Controller) IsAjax() bool {
 	return c.Ctx.Input.IsAjax()

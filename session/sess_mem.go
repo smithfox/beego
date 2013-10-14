@@ -2,6 +2,7 @@ package session
 
 import (
 	"container/list"
+	"errors"
 	"sync"
 	"time"
 )
@@ -69,6 +70,46 @@ func (pder *MemProvider) SessionInit(maxlifetime int64, savePath string) error {
 	return nil
 }
 
+//not change the last-access-time
+func (pder *MemProvider) HasSession(sid string) (bool, error) {
+	pder.lock.RLock()
+	defer pder.lock.RUnlock()
+
+	_, ok := pder.sessions[sid]
+	return ok, nil
+}
+
+//will update the last-access-time
+func (pder *MemProvider) GetSession(sid string) (SessionStore, error) {
+	pder.lock.RLock()
+	defer pder.lock.RUnlock()
+
+	if element, ok := pder.sessions[sid]; ok {
+		go pder.SessionUpdate(sid)
+		return element.Value.(*MemSessionStore), nil
+	} else {
+		return nil, nil
+	}
+}
+
+func (pder *MemProvider) NewSession(sid string) (SessionStore, error) {
+	pder.lock.Lock()
+	defer pder.lock.Unlock()
+
+	if sid == "" {
+		return nil, errors.New("can not create session with empty sid")
+	}
+
+	if _, ok := pder.sessions[sid]; ok {
+		return nil, errors.New("session with sid=" + sid + " exist")
+	}
+	newsess := &MemSessionStore{sid: sid, timeAccessed: time.Now(), value: make(map[interface{}]interface{})}
+	element := pder.list.PushBack(newsess)
+	pder.sessions[sid] = element
+	return newsess, nil
+}
+
+/*
 func (pder *MemProvider) SessionRead(sid string) (SessionStore, error) {
 	pder.lock.RLock()
 	if element, ok := pder.sessions[sid]; ok {
@@ -105,7 +146,8 @@ func (pder *MemProvider) SessionNewIfNo(sid string, createSidFunc CreateSidFunc)
 	}
 	return nil, nil
 }
-
+*/
+/*
 func (pder *MemProvider) SessionRegenerate(oldsid, sid string) (SessionStore, error) {
 	pder.lock.RLock()
 	if element, ok := pder.sessions[oldsid]; ok {
@@ -128,7 +170,7 @@ func (pder *MemProvider) SessionRegenerate(oldsid, sid string) (SessionStore, er
 	}
 	return nil, nil
 }
-
+*/
 func (pder *MemProvider) SessionDestroy(sid string) error {
 	pder.lock.Lock()
 	defer pder.lock.Unlock()

@@ -1,9 +1,9 @@
 package session
 
 import (
-	"errors"
-	"io"
-	"io/ioutil"
+	// "errors"
+	// "io"
+	// "io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -87,6 +87,25 @@ func (fp *FileProvider) SessionInit(maxlifetime int64, savePath string) error {
 	return nil
 }
 
+//not change the last-access-time
+func (fp *FileProvider) HasSession(sid string) (bool, error) {
+	//FIXME:xxx
+	return false, nil
+}
+
+//will update the last-access-time
+func (fp *FileProvider) GetSession(sid string) (SessionStore, error) {
+	//FIXME:xxx
+	return nil, nil
+}
+
+//create new session by the sid, if exist will return nil and an error
+func (fp *FileProvider) NewSession(sid string) (SessionStore, error) {
+	//FIXME:xxx
+	return nil, nil
+}
+
+/*
 func (fp *FileProvider) SessionRead(sid string) (SessionStore, error) {
 	err := os.MkdirAll(path.Join(fp.savePath, string(sid[0]), string(sid[1])), 0777)
 	if err != nil {
@@ -124,7 +143,7 @@ func (fp *FileProvider) SessionRead(sid string) (SessionStore, error) {
 //FIXME: xxxx
 func (fp *FileProvider) SessionNewIfNo(sid string, createSidFunc CreateSidFunc) (SessionStore, error) {
 	return nil, nil
-}
+}*/
 
 func (fp *FileProvider) SessionDestroy(sid string) error {
 	os.Remove(path.Join(fp.savePath))
@@ -136,6 +155,7 @@ func (fp *FileProvider) SessionGC() {
 	filepath.Walk(fp.savePath, gcpath)
 }
 
+/*
 func (fp *FileProvider) SessionRegenerate(oldsid, sid string) (SessionStore, error) {
 	err := os.MkdirAll(path.Join(fp.savePath, string(oldsid[0]), string(oldsid[1])), 0777)
 	if err != nil {
@@ -184,7 +204,7 @@ func (fp *FileProvider) SessionRegenerate(oldsid, sid string) (SessionStore, err
 	ss := &FileSessionStore{f: newf, sid: sid, values: kv}
 	return ss, nil
 }
-
+*/
 func gcpath(path string, info os.FileInfo, err error) error {
 	if err != nil {
 		return err

@@ -95,53 +95,71 @@ func (mp *MysqlProvider) SessionInit(maxlifetime int64, savePath string) error {
 	return nil
 }
 
-func (mp *MysqlProvider) SessionRead(sid string) (SessionStore, error) {
-	c := mp.connectInit()
-	row := c.QueryRow("select session_data from session where session_key=?", sid)
-	var sessiondata []byte
-	err := row.Scan(&sessiondata)
-	if err == sql.ErrNoRows {
-		c.Exec("insert into session(`session_key`,`session_data`,`session_expiry`) values(?,?,?)", sid, "", time.Now().Unix())
-	}
-	var kv map[interface{}]interface{}
-	if len(sessiondata) == 0 {
-		kv = make(map[interface{}]interface{})
-	} else {
-		kv, err = decodeGob(sessiondata)
-		if err != nil {
-			return nil, err
-		}
-	}
-	rs := &MysqlSessionStore{c: c, sid: sid, values: kv}
-	return rs, nil
+//not change the last-access-time
+func (mp *MysqlProvider) HasSession(sid string) (bool, error) {
+	//FIXME:xxx
+	return false, nil
 }
 
-//FIXME: xxxx
-func (mp *MysqlProvider) SessionNewIfNo(sid string, createSidFunc CreateSidFunc) (SessionStore, error) {
+//will update the last-access-time
+func (mp *MysqlProvider) GetSession(sid string) (SessionStore, error) {
+	//FIXME:xxx
 	return nil, nil
 }
 
-func (mp *MysqlProvider) SessionRegenerate(oldsid, sid string) (SessionStore, error) {
-	c := mp.connectInit()
-	row := c.QueryRow("select session_data from session where session_key=?", oldsid)
-	var sessiondata []byte
-	err := row.Scan(&sessiondata)
-	if err == sql.ErrNoRows {
-		c.Exec("insert into session(`session_key`,`session_data`,`session_expiry`) values(?,?,?)", oldsid, "", time.Now().Unix())
-	}
-	c.Exec("update session set `session_key`=? where session_key=?", sid, oldsid)
-	var kv map[interface{}]interface{}
-	if len(sessiondata) == 0 {
-		kv = make(map[interface{}]interface{})
-	} else {
-		kv, err = decodeGob(sessiondata)
-		if err != nil {
-			return nil, err
-		}
-	}
-	rs := &MysqlSessionStore{c: c, sid: sid, values: kv}
-	return rs, nil
+//create new session by the sid, if exist will return nil and an error
+func (mp *MysqlProvider) NewSession(sid string) (SessionStore, error) {
+	//FIXME:xxx
+	return nil, nil
 }
+
+// func (mp *MysqlProvider) SessionRead(sid string) (SessionStore, error) {
+// 	c := mp.connectInit()
+// 	row := c.QueryRow("select session_data from session where session_key=?", sid)
+// 	var sessiondata []byte
+// 	err := row.Scan(&sessiondata)
+// 	if err == sql.ErrNoRows {
+// 		c.Exec("insert into session(`session_key`,`session_data`,`session_expiry`) values(?,?,?)", sid, "", time.Now().Unix())
+// 	}
+// 	var kv map[interface{}]interface{}
+// 	if len(sessiondata) == 0 {
+// 		kv = make(map[interface{}]interface{})
+// 	} else {
+// 		kv, err = decodeGob(sessiondata)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 	}
+// 	rs := &MysqlSessionStore{c: c, sid: sid, values: kv}
+// 	return rs, nil
+// }
+
+// //FIXME: xxxx
+// func (mp *MysqlProvider) SessionNewIfNo(sid string, createSidFunc CreateSidFunc) (SessionStore, error) {
+// 	return nil, nil
+// }
+
+// func (mp *MysqlProvider) SessionRegenerate(oldsid, sid string) (SessionStore, error) {
+// 	c := mp.connectInit()
+// 	row := c.QueryRow("select session_data from session where session_key=?", oldsid)
+// 	var sessiondata []byte
+// 	err := row.Scan(&sessiondata)
+// 	if err == sql.ErrNoRows {
+// 		c.Exec("insert into session(`session_key`,`session_data`,`session_expiry`) values(?,?,?)", oldsid, "", time.Now().Unix())
+// 	}
+// 	c.Exec("update session set `session_key`=? where session_key=?", sid, oldsid)
+// 	var kv map[interface{}]interface{}
+// 	if len(sessiondata) == 0 {
+// 		kv = make(map[interface{}]interface{})
+// 	} else {
+// 		kv, err = decodeGob(sessiondata)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 	}
+// 	rs := &MysqlSessionStore{c: c, sid: sid, values: kv}
+// 	return rs, nil
+// }
 
 func (mp *MysqlProvider) SessionDestroy(sid string) error {
 	c := mp.connectInit()
