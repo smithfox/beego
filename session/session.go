@@ -6,11 +6,13 @@ import (
 	"crypto/rand"
 	//"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	mrand "math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -66,9 +68,10 @@ func Register(name string, provide Provider) {
 }
 
 type Manager struct {
-	cookieName  string //private cookiename
-	provider    Provider
-	maxlifetime int64
+	cookieName    string //private cookiename
+	extCookieName string //cookie session token extend info: IP, UID
+	provider      Provider
+	maxlifetime   int64
 	//options     []interface{}
 
 	//cache options setting
@@ -129,19 +132,21 @@ func NewManager(provideName, cookieName string, maxlifetime int64, savePath stri
 			}
 		}
 	}
+
 	return &Manager{
-		provider:    provider,
-		cookieName:  cookieName,
-		maxlifetime: maxlifetime,
-		hashfunc:    hashfunc,
-		hashkey:     hashkey,
-		maxage:      maxage,
-		secure:      secure,
+		provider:      provider,
+		cookieName:    cookieName,
+		extCookieName: "eds",
+		maxlifetime:   maxlifetime,
+		hashfunc:      hashfunc,
+		hashkey:       hashkey,
+		maxage:        maxage,
+		secure:        secure,
 	}, nil
 }
 
-//get SessionId
-func (manager *Manager) GetSessionId(r *http.Request) (string, error) {
+//get SessionCookie, is sid
+func (manager *Manager) GetSessionCookie(r *http.Request) (string, error) {
 	cookie, err := r.Cookie(manager.cookieName)
 	if err != nil {
 		return "", err
@@ -150,18 +155,8 @@ func (manager *Manager) GetSessionId(r *http.Request) (string, error) {
 	return cookie.Value, nil
 }
 
-//get Session By sessionId
-func (manager *Manager) GetSession(sid string) (SessionStore, error) {
-	return manager.provider.GetSession(sid)
-}
-
-//get Session By sessionId
-func (manager *Manager) NewSession(sid string) (SessionStore, error) {
-	return manager.provider.NewSession(sid)
-}
-
 //set session cookie
-func (manager *Manager) SetSessionCookie(sid string, w http.ResponseWriter) {
+func (manager *Manager) SetSessionCookie(w http.ResponseWriter, sid string) {
 	cookie := &http.Cookie{Name: manager.cookieName,
 		Value:    sid,
 		Path:     "/",
@@ -181,72 +176,75 @@ func (manager *Manager) DeleteSessionCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &cookie)
 }
 
-/*
-//get Session
-func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session SessionStore) {
-	cookie, err := r.Cookie(manager.cookieName)
-	if err != nil || cookie.Value == "" {
-		sid := manager.sessionId(r)
-		session, _ = manager.provider.SessionRead(sid)
-
-		cookie = &http.Cookie{Name: manager.cookieName,
-			Value:    session.SessionID(),
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   manager.secure}
-		if manager.maxage >= 0 {
-			cookie.MaxAge = manager.maxage
-		}
-		//cookie.Expires = time.Now().Add(time.Duration(manager.maxlifetime) * time.Second)
-		http.SetCookie(w, cookie)
-		//r.AddCookie(cookie)
-
-	} else {
-		//cookie.Expires = time.Now().Add(time.Duration(manager.maxlifetime) * time.Second)
-		sessionchanged := false
-
-		oldsid := cookie.Value
-		var newsid string = ""
-
-		session, _ = manager.provider.SessionNewIfNo(oldsid, func() string { newsid = manager.sessionId(r); return newsid })
-
-		cookie.HttpOnly = true
-		cookie.Path = "/"
-
-		newescapesid := session.SessionID()
-		if oldsid != newescapesid {
-			cookie.Value = newescapesid
-			sessionchanged = true
-		}
-
-		if manager.maxage >= 0 {
-			cookie.MaxAge = manager.maxage
-		}
-
-		if sessionchanged {
-			http.SetCookie(w, cookie)
-		}
+//get extra session cookie: IP, UID
+func (manager *Manager) GetSessionExtCookie(r *http.Request) (string, string, error) {
+	cookie, err := r.Cookie(manager.extCookieName)
+	if err != nil {
+		return "", "", err
 	}
-	return
+	value := cookie.Value
+	bb := []byte(value)
+	for i := 0; i < len(bb); i++ {
+		bb[i] = bb[i] - 64
+	}
+	value = string(bb)
+
+	ss := strings.Split(value, ",")
+	if len(ss) == 2 {
+		IP := ss[0]
+		UID := ss[1]
+		if IP == "" || UID == "" {
+			return "", "", errors.New("Invalid extra session cookie value")
+		} else {
+			return IP, UID, nil
+		}
+	} else {
+		return "", "", errors.New("Invalid extra session cookie format")
+	}
 }
-*/
+
+//set extra session cookie: IP, UID
+func (manager *Manager) SetSessionExtCookie(w http.ResponseWriter, IP string, UID string) {
+	value := fmt.Sprintf("%s,%s", IP, UID)
+	bb := []byte(value)
+	for i := 0; i < len(bb); i++ {
+		bb[i] = bb[i] + 64
+	}
+
+	value = string(bb)
+
+	cookie := &http.Cookie{Name: manager.extCookieName,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   manager.secure}
+	if manager.maxage >= 0 {
+		cookie.MaxAge = manager.maxage
+	}
+	//cookie.Expires = time.Now().Add(time.Duration(manager.maxlifetime) * time.Second)
+	http.SetCookie(w, cookie)
+}
+
+//delete extra session cookie: IP, UID
+func (manager *Manager) DeleteSessionExtCookie(w http.ResponseWriter) {
+	expiration := time.Now()
+	cookie := http.Cookie{Name: manager.extCookieName, Path: "/", HttpOnly: true, Expires: expiration, MaxAge: -1}
+	http.SetCookie(w, &cookie)
+}
+
+//get Session By sessionId
+func (manager *Manager) GetSession(sid string) (SessionStore, error) {
+	return manager.provider.GetSession(sid)
+}
+
+//get Session By sessionId
+func (manager *Manager) NewSession(sid string) (SessionStore, error) {
+	return manager.provider.NewSession(sid)
+}
 
 func (manager *Manager) DeleteSession(sid string) {
 	manager.provider.SessionDestroy(sid)
 }
-
-// //Destroy sessionid
-// func (manager *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
-// 	cookie, err := r.Cookie(manager.cookieName)
-// 	if err != nil || cookie.Value == "" {
-// 		return
-// 	} else {
-// 		manager.provider.SessionDestroy(cookie.Value)
-// 		expiration := time.Now()
-// 		cookie := http.Cookie{Name: manager.cookieName, Path: "/", HttpOnly: true, Expires: expiration, MaxAge: -1}
-// 		http.SetCookie(w, &cookie)
-// 	}
-// }
 
 func (manager *Manager) GC() {
 	manager.provider.SessionGC()
