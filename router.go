@@ -785,8 +785,9 @@ func (w *responseWriter) InitHeadContent(contentlength int64) {
 		w.Header().Set("Content-Encoding", "gzip")
 	} else if w.contentEncoding == "deflate" {
 		w.Header().Set("Content-Encoding", "deflate")
+	} else {
+		w.Header().Set("Content-Length", strconv.FormatInt(contentlength, 10))
 	}
-	w.Header().Set("Content-Length", strconv.FormatInt(contentlength, 10))
 }
 
 // Write writes the data to the connection as part of an HTTP reply,
