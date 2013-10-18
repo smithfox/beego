@@ -12,8 +12,10 @@ type Context struct {
 }
 
 func (ctx *Context) Redirect(status int, localurl string) {
-	ctx.Output.Header("Location", localurl)
-	ctx.Output.SetStatus(status)
+	ctx.Output.Status = status
+	http.Redirect(ctx.ResponseWriter, ctx.Request, localurl, status)
+	// ctx.Output.Header("Location", localurl)
+	//ctx.Output.SetStatus(status)
 }
 
 func (ctx *Context) Abort(status int, body string) {
