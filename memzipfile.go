@@ -64,16 +64,17 @@ import (
 	"compress/flate"
 	"compress/gzip"
 	"errors"
-	//"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
 var gmfim map[string]*MemFileInfo = make(map[string]*MemFileInfo)
+var gmzflock sync.RWMutex
 
 //TODO: 加锁保证数据完整性
 func OpenMemZipFile(path string, zip string) (*MemFile, error) {
@@ -91,7 +92,10 @@ func OpenMemZipFile(path string, zip string) (*MemFile, error) {
 	modtime := osfileinfo.ModTime()
 	fileSize := osfileinfo.Size()
 
+	gmzflock.RLock()
 	cfi, ok := gmfim[zip+":"+path]
+	gmzflock.RUnlock()
+
 	if ok && cfi.ModTime() == modtime && cfi.fileSize == fileSize {
 		//fmt.Printf("read %s file %s from cache\n", zip, path)
 	} else {
@@ -139,7 +143,9 @@ func OpenMemZipFile(path string, zip string) (*MemFile, error) {
 		}
 
 		cfi = &MemFileInfo{osfileinfo, modtime, content, int64(len(content)), fileSize}
+		gmzflock.Lock()
 		gmfim[zip+":"+path] = cfi
+		gmzflock.Unlock()
 		//fmt.Printf("%s file %s to %d, cache it\n", zip, path, len(content))
 	}
 	return &MemFile{fi: cfi, offset: 0}, nil
