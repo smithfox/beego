@@ -58,7 +58,7 @@ func AddFuncMap(key string, funname interface{}) error {
 
 type templatefile struct {
 	root  string
-	files map[string][]string
+	files []string
 }
 
 func (self *templatefile) visit(paths string, f os.FileInfo, err error) error {
@@ -68,6 +68,7 @@ func (self *templatefile) visit(paths string, f os.FileInfo, err error) error {
 	if f.IsDir() || (f.Mode()&os.ModeSymlink) > 0 {
 		return nil
 	}
+	
 	if !HasTemplateExt(paths) {
 		return nil
 	}
@@ -76,14 +77,8 @@ func (self *templatefile) visit(paths string, f os.FileInfo, err error) error {
 	a := []byte(paths)
 	a = a[len([]byte(self.root)):]
 	file := strings.TrimLeft(replace.Replace(string(a)), "/")
-	subdir := filepath.Dir(file)
-	if _, ok := self.files[subdir]; ok {
-		self.files[subdir] = append(self.files[subdir], file)
-	} else {
-		m := make([]string, 1)
-		m[0] = file
-		self.files[subdir] = m
-	}
+
+	self.files = append(self.files, file)
 
 	return nil
 }
@@ -116,7 +111,7 @@ func BuildTemplate(dir string) error {
 	}
 	self := &templatefile{
 		root:  dir,
-		files: make(map[string][]string),
+		files: make([]string, 0),
 	}
 	err := filepath.Walk(dir, func(path string, f os.FileInfo, err error) error {
 		return self.visit(path, f, err)
@@ -125,15 +120,15 @@ func BuildTemplate(dir string) error {
 		fmt.Printf("filepath.Walk() returned %v\n", err)
 		return err
 	}
-	for _, v := range self.files {
-		for _, file := range v {
-			t, err := getTemplate(self.root, file, v...)
-			if err != nil {
-				Trace("parse template err:", file, err)
-			} else {
-				BeeTemplates[file] = t
-			}
+	for _, file := range self.files {
+
+		t, err := getTemplate(self.root, file, self.files...)
+		if err != nil {
+			Trace("parse template err:", file, err)
+		} else {
+			BeeTemplates[file] = t
 		}
+
 	}
 	return nil
 }
