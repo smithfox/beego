@@ -26,20 +26,14 @@ type controllerInfo struct {
 }
 
 type ControllerRegistor struct {
-	routers      []*controllerInfo
-	fixrouters   []*controllerInfo
-	rawfilter    RawHttpFilterFunc
-	enableFilter bool
-	filters      map[string][]*FilterRouter
-	enableAuto   bool
-	autoRouter   map[string]map[string]reflect.Type //key:controller key:method value:reflect.type
+	routers    []*controllerInfo
+	fixrouters []*controllerInfo
+	rawfilter  RawHttpFilterFunc
 }
 
 func NewControllerRegistor() *ControllerRegistor {
 	return &ControllerRegistor{
-		routers:    make([]*controllerInfo, 0),
-		autoRouter: make(map[string]map[string]reflect.Type),
-		filters:    make(map[string][]*FilterRouter),
+		routers: make([]*controllerInfo, 0),
 	}
 }
 
@@ -197,69 +191,6 @@ func (p *ControllerRegistor) Add(pattern string, c ControllerInterface, mappingM
 	}
 }
 
-func (p *ControllerRegistor) AddAuto(c ControllerInterface) {
-	p.enableAuto = true
-	reflectVal := reflect.ValueOf(c)
-	rt := reflectVal.Type()
-	ct := reflect.Indirect(reflectVal).Type()
-	firstParam := strings.ToLower(strings.TrimSuffix(ct.Name(), "Controller"))
-	if _, ok := p.autoRouter[firstParam]; ok {
-		return
-	} else {
-		p.autoRouter[firstParam] = make(map[string]reflect.Type)
-	}
-	for i := 0; i < rt.NumMethod(); i++ {
-		p.autoRouter[firstParam][rt.Method(i).Name] = ct
-	}
-}
-
-// Filter adds the middleware filter.
-func (p *ControllerRegistor) AddFilter(pattern, action string, filter FilterFunc) {
-	p.enableFilter = true
-	mr := new(FilterRouter)
-	mr.filterFunc = filter
-
-	parts := strings.Split(pattern, "/")
-	j := 0
-	for i, part := range parts {
-		if strings.HasPrefix(part, ":") {
-			expr := "(.+)"
-			//a user may choose to override the defult expression
-			// similar to expressjs: ‘/user/:id([0-9]+)’
-			if index := strings.Index(part, "("); index != -1 {
-				expr = part[index:]
-				part = part[:index]
-				//match /user/:id:int ([0-9]+)
-				//match /post/:username:string	([\w]+)
-			} else if lindex := strings.LastIndex(part, ":"); lindex != 0 {
-				switch part[lindex:] {
-				case ":int":
-					expr = "([0-9]+)"
-					part = part[:lindex]
-				case ":string":
-					expr = `([\w]+)`
-					part = part[:lindex]
-				}
-			}
-			parts[i] = expr
-			j++
-		}
-	}
-	if j != 0 {
-		pattern = strings.Join(parts, "/")
-		regex, regexErr := regexp.Compile(pattern)
-		if regexErr != nil {
-			//TODO add error handling here to avoid panic
-			panic(regexErr)
-			return
-		}
-		mr.regex = regex
-		mr.hasregex = true
-	}
-	mr.pattern = pattern
-	p.filters[action] = append(p.filters[action], mr)
-}
-
 func (p *ControllerRegistor) SetRawFilter(rawfilter RawHttpFilterFunc) {
 	p.rawfilter = rawfilter
 }
@@ -277,13 +208,14 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 					panic(err)
 				} else {
 					var stack string
-					Critical("Handler crashed with error", err)
+					fmt.Printf("Beego Handler crashed with err=%v\n", err)
 					for i := 1; ; i++ {
 						_, file, line, ok := runtime.Caller(i)
 						if !ok {
 							break
 						}
-						Critical(file, line)
+						fmt.Printf("Beego Handler crashed file=%v, line=%v\n", file, line)
+
 						if RunMode == "dev" {
 							stack = stack + fmt.Sprintln(file, line)
 						}
@@ -304,38 +236,22 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 
 	w := &responseWriter{writer: rw}
 
-	w.Header().Set("Server", "beegoServer")
+	//w.Header().Set("Server", "beegoServer")
 	context := &beecontext.Context{
-		ResponseWriter: w,
-		Request:        r,
-		Input:          beecontext.NewInput(r),
-		Output:         beecontext.NewOutput(w),
+		W: w,
+		R: r,
 	}
-	context.Output.Context = context
-	context.Output.EnableGzip = EnableGzip
 
-	if context.Input.IsWebsocket() {
-		context.ResponseWriter = rw
-		context.Output = beecontext.NewOutput(rw)
+	context.EnableGzip = EnableGzip
+
+	if context.IsWebsocket() {
+		context.W = rw
 	}
 
 	var runrouter *controllerInfo
 	var findrouter bool
 
 	params := make(map[string]string)
-
-	if p.enableFilter {
-		if l, ok := p.filters["BeforRouter"]; ok {
-			for _, filterR := range l {
-				if filterR.ValidRouter(r.URL.Path) {
-					filterR.filterFunc(context)
-					if w.started {
-						return
-					}
-				}
-			}
-		}
-	}
 
 	//static file server
 	for prefix, staticDir := range StaticDir {
@@ -402,24 +318,7 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	if p.enableFilter {
-		if l, ok := p.filters["AfterStatic"]; ok {
-			for _, filterR := range l {
-				if filterR.ValidRouter(r.URL.Path) {
-					filterR.filterFunc(context)
-					if w.started {
-						return
-					}
-				}
-			}
-		}
-	}
-
 	requestPath := r.URL.Path
-
-	if CopyRequestBody {
-		context.Input.Body()
-	}
 
 	//first find path from the fixrouters to Improve Performance
 	for _, route := range p.fixrouters {
@@ -474,25 +373,13 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 			break
 		}
 	}
-	context.Input.Param = params
+	context.Param = params
 
 	if runrouter != nil {
 		if r.Method == "POST" {
 			r.ParseMultipartForm(MaxMemory)
 		}
-		//execute middleware filters
-		if p.enableFilter {
-			if l, ok := p.filters["BeforExec"]; ok {
-				for _, filterR := range l {
-					if filterR.ValidRouter(r.URL.Path) {
-						filterR.filterFunc(context)
-						if w.started {
-							return
-						}
-					}
-				}
-			}
-		}
+
 		//Invoke the request handler
 		vc := reflect.New(runrouter.controllerType)
 
@@ -624,7 +511,7 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 					panic("gotofunc is exists:" + gotofunc)
 				}
 			}
-			if !w.started && !context.Input.IsWebsocket() {
+			if !w.started && !context.IsWebsocket() {
 				if AutoRender {
 					method = vc.MethodByName("Render")
 					method.Call(in)
@@ -634,132 +521,11 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 
 		method = vc.MethodByName("Finish")
 		method.Call(in)
-		//execute middleware filters
-		if p.enableFilter {
-			if l, ok := p.filters["AfterExec"]; ok {
-				for _, filterR := range l {
-					if filterR.ValidRouter(r.URL.Path) {
-						filterR.filterFunc(context)
-						if w.started {
-							return
-						}
-					}
-				}
-			}
-		}
+
 		method = vc.MethodByName("Destructor")
 		method.Call(in)
 	}
 
-	//start autorouter
-
-	if p.enableAuto {
-		if !findrouter {
-			lastindex := strings.LastIndex(requestPath, "/")
-			lastsub := requestPath[lastindex+1:]
-			if subindex := strings.LastIndex(lastsub, "."); subindex != -1 {
-				context.Input.Param[":ext"] = lastsub[subindex+1:]
-				r.URL.Query().Add(":ext", lastsub[subindex+1:])
-				r.URL.RawQuery = r.URL.Query().Encode()
-				requestPath = requestPath[:len(requestPath)-len(lastsub[subindex:])]
-			}
-			for cName, methodmap := range p.autoRouter {
-
-				if strings.ToLower(requestPath) == "/"+cName {
-					http.Redirect(w, r, requestPath+"/", 301)
-					return
-				}
-
-				if strings.ToLower(requestPath) == "/"+cName+"/" {
-					requestPath = requestPath + "index"
-				}
-				if strings.HasPrefix(strings.ToLower(requestPath), "/"+cName+"/") {
-					for mName, controllerType := range methodmap {
-						if strings.HasPrefix(strings.ToLower(requestPath), "/"+cName+"/"+strings.ToLower(mName)) {
-							if r.Method == "POST" {
-								r.ParseMultipartForm(MaxMemory)
-							}
-							//execute middleware filters
-							if p.enableFilter {
-								if l, ok := p.filters["BeforExec"]; ok {
-									for _, filterR := range l {
-										if filterR.ValidRouter(r.URL.Path) {
-											filterR.filterFunc(context)
-											if w.started {
-												return
-											}
-										}
-									}
-								}
-							}
-							//parse params
-							otherurl := requestPath[len("/"+cName+"/"+strings.ToLower(mName)):]
-							if len(otherurl) > 1 {
-								plist := strings.Split(otherurl, "/")
-								for k, v := range plist[1:] {
-									params[strconv.Itoa(k)] = v
-								}
-							}
-							//Invoke the request handler
-							vc := reflect.New(controllerType)
-
-							//call the controller init function
-							init := vc.MethodByName("Init")
-							in := make([]reflect.Value, 3)
-							in[0] = reflect.ValueOf(context)
-							in[1] = reflect.ValueOf(controllerType.Name())
-							in[2] = reflect.ValueOf(vc.Interface())
-							init.Call(in)
-							//call prepare function
-							in = make([]reflect.Value, 0)
-							method := vc.MethodByName("Prepare")
-							method.Call(in)
-							method = vc.MethodByName(mName)
-							method.Call(in)
-							//if XSRF is Enable then check cookie where there has any cookie in the  request's cookie _csrf
-							if EnableXSRF {
-								method = vc.MethodByName("XsrfToken")
-								method.Call(in)
-								if r.Method == "POST" || r.Method == "DELETE" || r.Method == "PUT" ||
-									(r.Method == "POST" && (r.Form.Get("_method") == "delete" || r.Form.Get("_method") == "put")) {
-									method = vc.MethodByName("CheckXsrfCookie")
-									method.Call(in)
-								}
-							}
-							if !w.started && !context.Input.IsWebsocket() {
-								if AutoRender {
-									method = vc.MethodByName("Render")
-									method.Call(in)
-								}
-							}
-							method = vc.MethodByName("Finish")
-							method.Call(in)
-							//execute middleware filters
-							if p.enableFilter {
-								if l, ok := p.filters["AfterExec"]; ok {
-									for _, filterR := range l {
-										if filterR.ValidRouter(r.URL.Path) {
-											filterR.filterFunc(context)
-											if w.started {
-												return
-											}
-										}
-									}
-								}
-							}
-							method = vc.MethodByName("Destructor")
-							method.Call(in)
-							// set find
-							findrouter = true
-							goto Last
-						}
-					}
-				}
-			}
-		}
-	}
-
-Last:
 	//if no matches to url, throw a not found exception
 	if !findrouter {
 		middleware.Exception("404", rw, r, "")

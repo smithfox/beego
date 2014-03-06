@@ -55,7 +55,7 @@ func ReadFromRequest(c *Controller) *FlashData {
 	flash := &FlashData{
 		Data: make(map[string]string),
 	}
-	if cookie, err := c.Ctx.Request.Cookie("BEEGO_FLASH"); err == nil {
+	if cookie, err := c.Ctx.R.Cookie("BEEGO_FLASH"); err == nil {
 		v, _ := url.QueryUnescape(cookie.Value)
 		vals := strings.Split(v, "\x00")
 		for _, v := range vals {

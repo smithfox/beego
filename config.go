@@ -6,7 +6,7 @@ import (
 	"html/template"
 	"os"
 	"path"
-	"runtime"
+	//"runtime"
 	"strconv"
 )
 
@@ -19,6 +19,7 @@ var (
 	TemplateCache map[string]*template.Template
 	HttpAddr      string
 	HttpPort      int
+	HttpsPort     int
 	HttpTLS       bool
 	HttpCertFile  string
 	HttpKeyFile   string
@@ -35,19 +36,17 @@ var (
 	SessionName          string           // sessionName cookie's name
 	SessionGCMaxLifetime int64            // session's gc maxlifetime
 	SessionSavePath      string           // session savepath if use mysql/redis/file this set to the connectinfo
-	UseFcgi              bool
-	MaxMemory            int64
-	EnableGzip           bool   // enable gzip
-	DirectoryIndex       bool   //enable DirectoryIndex default is false
-	EnableHotUpdate      bool   //enable HotUpdate default is false
-	HttpServerTimeOut    int64  //set httpserver timeout
-	ErrorsShow           bool   //set weather show errors
-	XSRFKEY              string //set XSRF
-	EnableXSRF           bool
-	XSRFExpire           int
-	CopyRequestBody      bool //When in raw application, You want to the reqeustbody
-	TemplateLeft         string
-	TemplateRight        string
+
+	MaxMemory         int64
+	EnableGzip        bool   // enable gzip
+	DirectoryIndex    bool   //enable DirectoryIndex default is false
+	HttpServerTimeOut int64  //set httpserver timeout
+	ErrorsShow        bool   //set weather show errors
+	XSRFKEY           string //set XSRF
+	EnableXSRF        bool
+	XSRFExpire        int
+	TemplateLeft      string
+	TemplateRight     string
 )
 
 func init() {
@@ -58,6 +57,7 @@ func init() {
 	TemplateCache = make(map[string]*template.Template)
 	HttpAddr = ""
 	HttpPort = 8080
+	HttpsPort = 4043
 	AppName = "beego"
 	RunMode = "dev" //default runmod
 	AutoRender = true
@@ -69,7 +69,6 @@ func init() {
 	SessionName = "beegosessionID"
 	SessionGCMaxLifetime = 3600
 	SessionSavePath = ""
-	UseFcgi = false
 	MaxMemory = 1 << 26 //64MB
 	EnableGzip = false
 	StaticDir["/static"] = "static"
@@ -80,8 +79,8 @@ func init() {
 	XSRFExpire = 0
 	TemplateLeft = "{{"
 	TemplateRight = "}}"
-	ParseConfig()
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	//ParseConfig()
+	//runtime.GOMAXPROCS(runtime.NumCPU())
 }
 
 func ParseConfig() (err error) {
@@ -89,9 +88,40 @@ func ParseConfig() (err error) {
 	if err != nil {
 		return err
 	} else {
-		HttpAddr = AppConfig.String("httpaddr")
-		if v, err := AppConfig.Int("httpport"); err == nil {
+		HttpAddr = AppConfig.String("http.addr")
+		if v, err := AppConfig.Int("http.port"); err == nil {
 			HttpPort = v
+		}
+		if timeout, err := AppConfig.Int64("http.servertimeout"); err == nil {
+			HttpServerTimeOut = timeout
+		}
+		if httptls, err := AppConfig.Bool("https"); err == nil {
+			HttpTLS = httptls
+		}
+		if v, err := AppConfig.Int("https.port"); err == nil {
+			HttpsPort = v
+		}
+		if certfile := AppConfig.String("https.certfile"); certfile != "" {
+			HttpCertFile = certfile
+		}
+		if keyfile := AppConfig.String("https.keyfile"); keyfile != "" {
+			HttpKeyFile = keyfile
+		}
+		if sessionon, err := AppConfig.Bool("session"); err == nil {
+			SessionOn = sessionon
+		}
+		if sessProvider := AppConfig.String("session.provider"); sessProvider != "" {
+			SessionProvider = sessProvider
+		}
+		if sessName := AppConfig.String("session.name"); sessName != "" {
+			SessionName = sessName
+		}
+		if sesssavepath := AppConfig.String("session.savepath"); sesssavepath != "" {
+			SessionSavePath = sesssavepath
+		}
+		if sessMaxLifeTime, err := AppConfig.Int("session.gcmaxlifetime"); err == nil && sessMaxLifeTime != 0 {
+			int64val, _ := strconv.ParseInt(strconv.Itoa(sessMaxLifeTime), 10, 64)
+			SessionGCMaxLifetime = int64val
 		}
 		if maxmemory, err := AppConfig.Int64("maxmemory"); err == nil {
 			MaxMemory = maxmemory
@@ -112,67 +142,35 @@ func ParseConfig() (err error) {
 		if views := AppConfig.String("viewspath"); views != "" {
 			ViewsPath = views
 		}
-		if sessionon, err := AppConfig.Bool("sessionon"); err == nil {
-			SessionOn = sessionon
-		}
-		if sessProvider := AppConfig.String("sessionprovider"); sessProvider != "" {
-			SessionProvider = sessProvider
-		}
-		if sessName := AppConfig.String("sessionname"); sessName != "" {
-			SessionName = sessName
-		}
-		if sesssavepath := AppConfig.String("sessionsavepath"); sesssavepath != "" {
-			SessionSavePath = sesssavepath
-		}
-		if sessMaxLifeTime, err := AppConfig.Int("sessiongcmaxlifetime"); err == nil && sessMaxLifeTime != 0 {
-			int64val, _ := strconv.ParseInt(strconv.Itoa(sessMaxLifeTime), 10, 64)
-			SessionGCMaxLifetime = int64val
-		}
-		if usefcgi, err := AppConfig.Bool("usefcgi"); err == nil {
-			UseFcgi = usefcgi
-		}
-		if enablegzip, err := AppConfig.Bool("enablegzip"); err == nil {
+
+		if enablegzip, err := AppConfig.Bool("gzip"); err == nil {
 			EnableGzip = enablegzip
 		}
 		if directoryindex, err := AppConfig.Bool("directoryindex"); err == nil {
 			DirectoryIndex = directoryindex
 		}
-		if hotupdate, err := AppConfig.Bool("hotupdate"); err == nil {
-			EnableHotUpdate = hotupdate
-		}
-		if timeout, err := AppConfig.Int64("httpservertimeout"); err == nil {
-			HttpServerTimeOut = timeout
-		}
+
 		if errorsshow, err := AppConfig.Bool("errorsshow"); err == nil {
 			ErrorsShow = errorsshow
 		}
-		if copyrequestbody, err := AppConfig.Bool("copyrequestbody"); err == nil {
-			CopyRequestBody = copyrequestbody
-		}
-		if xsrfkey := AppConfig.String("xsrfkey"); xsrfkey != "" {
-			XSRFKEY = xsrfkey
-		}
-		if enablexsrf, err := AppConfig.Bool("enablexsrf"); err == nil {
+
+		if enablexsrf, err := AppConfig.Bool("xsrf"); err == nil {
 			EnableXSRF = enablexsrf
 		}
-		if expire, err := AppConfig.Int("xsrfexpire"); err == nil {
+		if xsrfkey := AppConfig.String("xsrf.key"); xsrfkey != "" {
+			XSRFKEY = xsrfkey
+		}
+		if expire, err := AppConfig.Int("xsrf.expire"); err == nil {
 			XSRFExpire = expire
 		}
+
 		if tplleft := AppConfig.String("templateleft"); tplleft != "" {
 			TemplateLeft = tplleft
 		}
 		if tplright := AppConfig.String("templateright"); tplright != "" {
 			TemplateRight = tplright
 		}
-		if httptls, err := AppConfig.Bool("HttpTLS"); err == nil {
-			HttpTLS = httptls
-		}
-		if certfile := AppConfig.String("HttpCertFile"); certfile != "" {
-			HttpCertFile = certfile
-		}
-		if keyfile := AppConfig.String("HttpKeyFile"); keyfile != "" {
-			HttpKeyFile = keyfile
-		}
+
 	}
 	return nil
 }

@@ -3,9 +3,8 @@ package beego
 import (
 	"fmt"
 	"github.com/smithfox/beego/context"
-	"net"
 	"net/http"
-	"net/http/fcgi"
+	"path/filepath"
 	"time"
 )
 
@@ -25,73 +24,55 @@ func NewApp() *App {
 	return app
 }
 
-func (app *App) Run() {
+func (app *App) RunHttps() {
+	addr := HttpAddr
+
+	if HttpsPort != 0 {
+		addr = fmt.Sprintf("%s:%d", HttpAddr, HttpsPort)
+	}
+
+	s := &http.Server{
+		Addr:         addr,
+		Handler:      app.Handlers,
+		ReadTimeout:  time.Duration(HttpServerTimeOut) * time.Second,
+		WriteTimeout: time.Duration(HttpServerTimeOut) * time.Second,
+	}
+
+	certfile := filepath.Join(AppPath, filepath.Clean(HttpCertFile))
+	keyfile := filepath.Join(AppPath, filepath.Clean(HttpKeyFile))
+
+	certfile = filepath.FromSlash(certfile)
+	keyfile = filepath.FromSlash(keyfile)
+
+	fmt.Printf("certfile=%s,keyfile=%s\n", certfile, keyfile)
+	err := s.ListenAndServeTLS(certfile, keyfile)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (app *App) RunHttp() {
 	addr := HttpAddr
 
 	if HttpPort != 0 {
 		addr = fmt.Sprintf("%s:%d", HttpAddr, HttpPort)
 	}
-	var (
-		err error
-		l   net.Listener
-	)
-	if UseFcgi {
-		if HttpPort == 0 {
-			l, err = net.Listen("unix", addr)
-		} else {
-			l, err = net.Listen("tcp", addr)
-		}
-		if err != nil {
-			BeeLogger.Critical("Listen: ", err)
-		}
-		err = fcgi.Serve(l, app.Handlers)
-	} else {
-		if EnableHotUpdate {
-			server := &http.Server{
-				Handler:      app.Handlers,
-				ReadTimeout:  time.Duration(HttpServerTimeOut) * time.Second,
-				WriteTimeout: time.Duration(HttpServerTimeOut) * time.Second,
-			}
-			laddr, err := net.ResolveTCPAddr("tcp", addr)
-			if nil != err {
-				BeeLogger.Critical("ResolveTCPAddr:", err)
-			}
-			l, err = GetInitListner(laddr)
-			theStoppable = newStoppable(l)
-			err = server.Serve(theStoppable)
-			theStoppable.wg.Wait()
-			CloseSelf()
-		} else {
-			s := &http.Server{
-				Addr:         addr,
-				Handler:      app.Handlers,
-				ReadTimeout:  time.Duration(HttpServerTimeOut) * time.Second,
-				WriteTimeout: time.Duration(HttpServerTimeOut) * time.Second,
-			}
-			if HttpTLS {
-				err = s.ListenAndServeTLS(HttpCertFile, HttpKeyFile)
-			} else {
-				err = s.ListenAndServe()
-			}
-		}
+
+	s := &http.Server{
+		Addr:         addr,
+		Handler:      app.Handlers,
+		ReadTimeout:  time.Duration(HttpServerTimeOut) * time.Second,
+		WriteTimeout: time.Duration(HttpServerTimeOut) * time.Second,
 	}
+
+	err := s.ListenAndServe()
 	if err != nil {
-		BeeLogger.Critical("ListenAndServe: ", err)
+		panic(err)
 	}
 }
 
 func (app *App) Router(path string, c ControllerInterface, mappingMethods ...string) *App {
 	app.Handlers.Add(path, c, mappingMethods...)
-	return app
-}
-
-func (app *App) AutoRouter(c ControllerInterface) *App {
-	app.Handlers.AddAuto(c)
-	return app
-}
-
-func (app *App) AddFilter(pattern, action string, filter FilterFunc) *App {
-	app.Handlers.AddFilter(pattern, action, filter)
 	return app
 }
 

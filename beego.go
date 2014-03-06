@@ -1,6 +1,7 @@
 package beego
 
 import (
+	"fmt"
 	"github.com/smithfox/beego/middleware"
 	"github.com/smithfox/beego/session"
 	"net/http"
@@ -11,17 +12,6 @@ const VERSION = "0.9.9"
 
 func Router(rootpath string, c ControllerInterface, mappingMethods ...string) *App {
 	BeeApp.Router(rootpath, c, mappingMethods...)
-	return BeeApp
-}
-
-func RESTRouter(rootpath string, c ControllerInterface) *App {
-	Router(rootpath, c)
-	Router(path.Join(rootpath, ":objectId"), c)
-	return BeeApp
-}
-
-func AutoRouter(c ControllerInterface) *App {
-	BeeApp.AutoRouter(c)
 	return BeeApp
 }
 
@@ -45,30 +35,17 @@ func DelStaticPath(url string) *App {
 	return BeeApp
 }
 
-//action has four values:
-//First
-//BeforRouter
-//AfterStatic
-//BeforExec
-//AfterExec
-func AddFilter(pattern, action string, filter FilterFunc) *App {
-	BeeApp.AddFilter(pattern, action, filter)
-	return BeeApp
-}
-
 func SetRawFilter(rawfilter RawHttpFilterFunc) *App {
 	BeeApp.SetRawFilter(rawfilter)
 	return BeeApp
 }
 
-func Run() {
+func Prepare() error {
 	//if AppConfigPath not In the conf/app.conf reParse config
 	if AppConfigPath != path.Join(AppPath, "conf", "app.conf") {
 		err := ParseConfig()
 		if err != nil {
-			if RunMode == "dev" {
-				Warn(err)
-			}
+			fmt.Printf("Beego ParseConfig err=%v\n", err)
 		}
 	}
 
@@ -79,14 +56,20 @@ func Run() {
 
 	err := BuildTemplate(ViewsPath)
 	if err != nil {
-		if RunMode == "dev" {
-			Warn(err)
-		}
+		fmt.Printf("Beego BuildTemplate err=%v\n", err)
+		return err
 	}
 
 	middleware.VERSION = VERSION
 	middleware.AppName = AppName
 	middleware.RegisterErrorHander()
+	return nil
+}
 
-	BeeApp.Run()
+func RunHttp() {
+	BeeApp.RunHttp()
+}
+
+func RunHttps() {
+	BeeApp.RunHttps()
 }

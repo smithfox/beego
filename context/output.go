@@ -16,27 +16,14 @@ import (
 	"strings"
 )
 
-type BeegoOutput struct {
-	Context    *Context
-	Status     int
-	EnableGzip bool
-	res        http.ResponseWriter
+func (ctx *Context) SetHeader(key, val string) {
+	ctx.W.Header().Set(key, val)
 }
 
-func NewOutput(res http.ResponseWriter) *BeegoOutput {
-	return &BeegoOutput{
-		res: res,
-	}
-}
-
-func (output *BeegoOutput) Header(key, val string) {
-	output.res.Header().Set(key, val)
-}
-
-func (output *BeegoOutput) Body(content []byte) {
-	output_writer := output.res.(io.Writer)
-	if output.EnableGzip == true && output.Context.Input.Header("Accept-Encoding") != "" {
-		splitted := strings.SplitN(output.Context.Input.Header("Accept-Encoding"), ",", -1)
+func (ctx *Context) Body(content []byte) {
+	output_writer := ctx.W.(io.Writer)
+	if ctx.EnableGzip == true && ctx.GetHeader("Accept-Encoding") != "" {
+		splitted := strings.SplitN(ctx.GetHeader("Accept-Encoding"), ",", -1)
 		encodings := make([]string, len(splitted))
 
 		for i, val := range splitted {
@@ -44,18 +31,18 @@ func (output *BeegoOutput) Body(content []byte) {
 		}
 		for _, val := range encodings {
 			if val == "gzip" {
-				output.Header("Content-Encoding", "gzip")
-				output_writer, _ = gzip.NewWriterLevel(output.res, gzip.BestSpeed)
+				ctx.SetHeader("Content-Encoding", "gzip")
+				output_writer, _ = gzip.NewWriterLevel(ctx.W, gzip.BestSpeed)
 
 				break
 			} else if val == "deflate" {
-				output.Header("Content-Encoding", "deflate")
-				output_writer, _ = flate.NewWriter(output.res, flate.BestSpeed)
+				ctx.SetHeader("Content-Encoding", "deflate")
+				output_writer, _ = flate.NewWriter(ctx.W, flate.BestSpeed)
 				break
 			}
 		}
 	} else {
-		output.Header("Content-Length", strconv.Itoa(len(content)))
+		ctx.SetHeader("Content-Length", strconv.Itoa(len(content)))
 	}
 	output_writer.Write(content)
 	switch output_writer.(type) {
@@ -68,7 +55,7 @@ func (output *BeegoOutput) Body(content []byte) {
 	}
 }
 
-func (output *BeegoOutput) Cookie(name string, value string, others ...interface{}) {
+func (ctx *Context) SetCookie(name string, value string, others ...interface{}) {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "%s=%s", sanitizeName(name), sanitizeValue(value))
 	if len(others) > 0 {
@@ -105,7 +92,7 @@ func (output *BeegoOutput) Cookie(name string, value string, others ...interface
 	if len(others) > 4 {
 		fmt.Fprintf(&b, "; HttpOnly")
 	}
-	output.res.Header().Add("Set-Cookie", b.String())
+	ctx.W.Header().Add("Set-Cookie", b.String())
 }
 
 var cookieNameSanitizer = strings.NewReplacer("\n", "-", "\r", "-")
@@ -120,8 +107,8 @@ func sanitizeValue(v string) string {
 	return cookieValueSanitizer.Replace(v)
 }
 
-func (output *BeegoOutput) Json(data interface{}, hasIndent bool, coding bool) error {
-	output.Header("Content-Type", "application/json;charset=UTF-8")
+func (ctx *Context) Json(data interface{}, hasIndent bool, coding bool) error {
+	ctx.SetHeader("Content-Type", "application/json;charset=UTF-8")
 	var content []byte
 	var err error
 	if hasIndent {
@@ -130,18 +117,18 @@ func (output *BeegoOutput) Json(data interface{}, hasIndent bool, coding bool) e
 		content, err = json.Marshal(data)
 	}
 	if err != nil {
-		http.Error(output.res, err.Error(), http.StatusInternalServerError)
+		http.Error(ctx.W, err.Error(), http.StatusInternalServerError)
 		return err
 	}
 	if coding {
 		content = []byte(stringsToJson(string(content)))
 	}
-	output.Body(content)
+	ctx.Body(content)
 	return nil
 }
 
-func (output *BeegoOutput) Jsonp(data interface{}, hasIndent bool) error {
-	output.Header("Content-Type", "application/javascript;charset=UTF-8")
+func (ctx *Context) Jsonp(data interface{}, hasIndent bool) error {
+	ctx.SetHeader("Content-Type", "application/javascript;charset=UTF-8")
 	var content []byte
 	var err error
 	if hasIndent {
@@ -150,10 +137,10 @@ func (output *BeegoOutput) Jsonp(data interface{}, hasIndent bool) error {
 		content, err = json.Marshal(data)
 	}
 	if err != nil {
-		http.Error(output.res, err.Error(), http.StatusInternalServerError)
+		http.Error(ctx.W, err.Error(), http.StatusInternalServerError)
 		return err
 	}
-	callback := output.Context.Input.Query("callback")
+	callback := ctx.GetQuery("callback")
 	if callback == "" {
 		return errors.New(`"callback" parameter required`)
 	}
@@ -161,12 +148,12 @@ func (output *BeegoOutput) Jsonp(data interface{}, hasIndent bool) error {
 	callback_content.WriteString("(")
 	callback_content.Write(content)
 	callback_content.WriteString(");\r\n")
-	output.Body(callback_content.Bytes())
+	ctx.Body(callback_content.Bytes())
 	return nil
 }
 
-func (output *BeegoOutput) Xml(data interface{}, hasIndent bool) error {
-	output.Header("Content-Type", "application/xml;charset=UTF-8")
+func (ctx *Context) Xml(data interface{}, hasIndent bool) error {
+	ctx.SetHeader("Content-Type", "application/xml;charset=UTF-8")
 	var content []byte
 	var err error
 	if hasIndent {
@@ -175,74 +162,76 @@ func (output *BeegoOutput) Xml(data interface{}, hasIndent bool) error {
 		content, err = xml.Marshal(data)
 	}
 	if err != nil {
-		http.Error(output.res, err.Error(), http.StatusInternalServerError)
+		http.Error(ctx.W, err.Error(), http.StatusInternalServerError)
 		return err
 	}
-	output.Body(content)
+	ctx.Body(content)
 	return nil
 }
 
-func (output *BeegoOutput) Download(file string) {
-	output.Header("Content-Description", "File Transfer")
-	output.Header("Content-Type", "application/octet-stream")
-	output.Header("Content-Disposition", "attachment; filename="+filepath.Base(file))
-	output.Header("Content-Transfer-Encoding", "binary")
-	output.Header("Expires", "0")
-	output.Header("Cache-Control", "must-revalidate")
-	output.Header("Pragma", "public")
-	http.ServeFile(output.res, output.Context.Request, file)
+func (ctx *Context) Download(file string) {
+	ctx.SetHeader("Content-Description", "File Transfer")
+	ctx.SetHeader("Content-Type", "application/octet-stream")
+	ctx.SetHeader("Content-Disposition", "attachment; filename="+filepath.Base(file))
+	ctx.SetHeader("Content-Transfer-Encoding", "binary")
+	ctx.SetHeader("Expires", "0")
+	ctx.SetHeader("Cache-Control", "must-revalidate")
+	ctx.SetHeader("Pragma", "public")
+	http.ServeFile(ctx.W, ctx.R, file)
 }
 
-func (output *BeegoOutput) ContentType(ext string) {
+func (ctx *Context) ContentType(ext string) {
 	if !strings.HasPrefix(ext, ".") {
 		ext = "." + ext
 	}
 	ctype := mime.TypeByExtension(ext)
 	if ctype != "" {
-		output.Header("Content-Type", ctype)
+		ctx.SetHeader("Content-Type", ctype)
 	}
 }
 
-func (output *BeegoOutput) SetStatus(status int) {
-	output.res.WriteHeader(status)
-	output.Status = status
+func (ctx *Context) SetStatus(status int) {
+	ctx.W.WriteHeader(status)
+	//	ctx.Status = status
 }
 
-func (output *BeegoOutput) IsCachable(status int) bool {
-	return output.Status >= 200 && output.Status < 300 || output.Status == 304
+/*
+func (ctx *Context) IsCachable(status int) bool {
+	return ctx.Status >= 200 && ctx.Status < 300 || ctx.Status == 304
 }
 
-func (output *BeegoOutput) IsEmpty(status int) bool {
-	return output.Status == 201 || output.Status == 204 || output.Status == 304
+func (ctx *Context) IsEmpty(status int) bool {
+	return ctx.Status == 201 || ctx.Status == 204 || ctx.Status == 304
 }
 
-func (output *BeegoOutput) IsOk(status int) bool {
-	return output.Status == 200
+func (ctx *Context) IsOk(status int) bool {
+	return ctx.Status == 200
 }
 
-func (output *BeegoOutput) IsSuccessful(status int) bool {
-	return output.Status >= 200 && output.Status < 300
+func (ctx *Context) IsSuccessful(status int) bool {
+	return ctx.Status >= 200 && ctx.Status < 300
 }
 
-func (output *BeegoOutput) IsRedirect(status int) bool {
-	return output.Status == 301 || output.Status == 302 || output.Status == 303 || output.Status == 307
+func (ctx *Context) IsRedirect(status int) bool {
+	return ctx.Status == 301 || ctx.Status == 302 || ctx.Status == 303 || ctx.Status == 307
 }
 
-func (output *BeegoOutput) IsForbidden(status int) bool {
-	return output.Status == 403
+func (ctx *Context) IsForbidden(status int) bool {
+	return ctx.Status == 403
 }
 
-func (output *BeegoOutput) IsNotFound(status int) bool {
-	return output.Status == 404
+func (ctx *Context) IsNotFound(status int) bool {
+	return ctx.Status == 404
 }
 
-func (output *BeegoOutput) IsClientError(status int) bool {
-	return output.Status >= 400 && output.Status < 500
+func (ctx *Context) IsClientError(status int) bool {
+	return ctx.Status >= 400 && ctx.Status < 500
 }
 
-func (output *BeegoOutput) IsServerError(status int) bool {
-	return output.Status >= 500 && output.Status < 600
+func (ctx *Context) IsServerError(status int) bool {
+	return ctx.Status >= 500 && ctx.Status < 600
 }
+*/
 
 func stringsToJson(str string) string {
 	rs := []rune(str)

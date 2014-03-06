@@ -68,7 +68,7 @@ func (self *templatefile) visit(paths string, f os.FileInfo, err error) error {
 	if f.IsDir() || (f.Mode()&os.ModeSymlink) > 0 {
 		return nil
 	}
-	
+
 	if !HasTemplateExt(paths) {
 		return nil
 	}
@@ -124,7 +124,7 @@ func BuildTemplate(dir string) error {
 
 		t, err := getTemplate(self.root, file, self.files...)
 		if err != nil {
-			Trace("parse template err:", file, err)
+			fmt.Printf("Parse Template %s err=%v\n", file, err)
 		} else {
 			BeeTemplates[file] = t
 		}
@@ -200,7 +200,7 @@ func _getTemplate(t0 *template.Template, root string, submods [][]string, others
 					var submods1 [][]string
 					t, submods1, err = getTplDeep(root, otherfile, "", t)
 					if err != nil {
-						Trace("template parse file err:", err)
+						fmt.Printf("Beego Template getTplDeep %s err=%v\n", otherfile, err)
 					} else if submods1 != nil && len(submods1) > 0 {
 						t, err = _getTemplate(t, root, submods1, others...)
 					}
@@ -221,7 +221,7 @@ func _getTemplate(t0 *template.Template, root string, submods [][]string, others
 						var submods1 [][]string
 						t, submods1, err = getTplDeep(root, otherfile, "", t)
 						if err != nil {
-							Trace("template parse file err:", err)
+							fmt.Printf("Beego Template getTplDeep %s err=%v\n", otherfile, err)
 						} else if submods1 != nil && len(submods1) > 0 {
 							t, err = _getTemplate(t, root, submods1, others...)
 						}

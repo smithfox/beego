@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"github.com/smithfox/beego/context"
 	"github.com/smithfox/beego/session"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -26,7 +25,6 @@ type Controller struct {
 	Data          map[interface{}]interface{}
 	ChildName     string
 	TplNames      string
-	Layout        string
 	TplExt        string
 	_xsrf_token   string
 	gotofunc      string
@@ -51,7 +49,6 @@ type ControllerInterface interface {
 
 func (c *Controller) Init(ctx *context.Context, childName string, app interface{}) {
 	c.Data = make(map[interface{}]interface{})
-	c.Layout = ""
 	c.TplNames = ""
 	c.ChildName = childName
 	c.Ctx = ctx
@@ -78,31 +75,31 @@ func (c *Controller) Destructor() {
 }
 
 func (c *Controller) Get() {
-	http.Error(c.Ctx.ResponseWriter, "Method Not Allowed", 405)
+	http.Error(c.Ctx.W, "Method Not Allowed", 405)
 }
 
 func (c *Controller) Post() {
-	http.Error(c.Ctx.ResponseWriter, "Method Not Allowed", 405)
+	http.Error(c.Ctx.W, "Method Not Allowed", 405)
 }
 
 func (c *Controller) Delete() {
-	http.Error(c.Ctx.ResponseWriter, "Method Not Allowed", 405)
+	http.Error(c.Ctx.W, "Method Not Allowed", 405)
 }
 
 func (c *Controller) Put() {
-	http.Error(c.Ctx.ResponseWriter, "Method Not Allowed", 405)
+	http.Error(c.Ctx.W, "Method Not Allowed", 405)
 }
 
 func (c *Controller) Head() {
-	http.Error(c.Ctx.ResponseWriter, "Method Not Allowed", 405)
+	http.Error(c.Ctx.W, "Method Not Allowed", 405)
 }
 
 func (c *Controller) Patch() {
-	http.Error(c.Ctx.ResponseWriter, "Method Not Allowed", 405)
+	http.Error(c.Ctx.W, "Method Not Allowed", 405)
 }
 
 func (c *Controller) Options() {
-	http.Error(c.Ctx.ResponseWriter, "Method Not Allowed", 405)
+	http.Error(c.Ctx.W, "Method Not Allowed", 405)
 }
 
 func (c *Controller) Render() error {
@@ -111,8 +108,8 @@ func (c *Controller) Render() error {
 	if err != nil {
 		return err
 	} else {
-		c.Ctx.Output.Header("Content-Type", "text/html; charset=utf-8")
-		c.Ctx.Output.Body(rb)
+		c.Ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+		c.Ctx.Body(rb)
 	}
 	return nil
 }
@@ -123,51 +120,22 @@ func (c *Controller) RenderString() (string, error) {
 }
 
 func (c *Controller) RenderBytes() ([]byte, error) {
-	//if the controller has set layout, then first get the tplname's content set the content to the layout
-	if c.Layout != "" {
-		if c.TplNames == "" {
-			c.TplNames = c.ChildName + "/" + strings.ToLower(c.Ctx.Request.Method) + "." + c.TplExt
-		}
-		if RunMode == "dev" {
-			BuildTemplate(ViewsPath)
-		}
-		newbytes := bytes.NewBufferString("")
-		if _, ok := BeeTemplates[c.TplNames]; !ok {
-			panic("can't find templatefile in the path:" + c.TplNames)
-			return []byte{}, errors.New("can't find templatefile in the path:" + c.TplNames)
-		}
-		err := BeeTemplates[c.TplNames].ExecuteTemplate(newbytes, c.TplNames, c.Data)
-		if err != nil {
-			Trace("template Execute err:", err)
-		}
-		tplcontent, _ := ioutil.ReadAll(newbytes)
-		c.Data["LayoutContent"] = template.HTML(string(tplcontent))
-		ibytes := bytes.NewBufferString("")
-		err = BeeTemplates[c.Layout].ExecuteTemplate(ibytes, c.Layout, c.Data)
-		if err != nil {
-			Trace("template Execute err:", err)
-		}
-		icontent, _ := ioutil.ReadAll(ibytes)
-		return icontent, nil
-	} else {
-		if c.TplNames == "" {
-			c.TplNames = c.ChildName + "/" + strings.ToLower(c.Ctx.Request.Method) + "." + c.TplExt
-		}
-		if RunMode == "dev" {
-			BuildTemplate(ViewsPath)
-		}
-		ibytes := bytes.NewBufferString("")
-		if _, ok := BeeTemplates[c.TplNames]; !ok {
-			panic("can't find templatefile in the path:" + c.TplNames)
-			return []byte{}, errors.New("can't find templatefile in the path:" + c.TplNames)
-		}
-		err := BeeTemplates[c.TplNames].ExecuteTemplate(ibytes, c.TplNames, c.Data)
-		if err != nil {
-			Trace("template Execute err:", err)
-		}
-		icontent, _ := ioutil.ReadAll(ibytes)
-		return icontent, nil
+	if c.TplNames == "" {
+		c.TplNames = c.ChildName + "/" + strings.ToLower(c.Ctx.R.Method) + "." + c.TplExt
 	}
+
+	ibytes := bytes.NewBufferString("")
+	if _, ok := BeeTemplates[c.TplNames]; !ok {
+		panic("can't find templatefile in the path:" + c.TplNames)
+		return []byte{}, errors.New("can't find templatefile in the path:" + c.TplNames)
+	}
+	err := BeeTemplates[c.TplNames].ExecuteTemplate(ibytes, c.TplNames, c.Data)
+	if err != nil {
+		fmt.Printf("Beego ExecuteTemplate %s err=%v\n", c.TplNames, err)
+	}
+	icontent, _ := ioutil.ReadAll(ibytes)
+	return icontent, nil
+
 	return []byte{}, nil
 }
 
@@ -190,7 +158,7 @@ func (c *Controller) ServeJson(encoding ...bool) {
 	if len(encoding) > 0 && encoding[0] == true {
 		hasencoding = true
 	}
-	c.Ctx.Output.Json(c.Data["json"], hasIndent, hasencoding)
+	c.Ctx.Json(c.Data["json"], hasIndent, hasencoding)
 }
 
 func (c *Controller) ServeJsonp() {
@@ -200,7 +168,7 @@ func (c *Controller) ServeJsonp() {
 	} else {
 		hasIndent = true
 	}
-	c.Ctx.Output.Jsonp(c.Data["jsonp"], hasIndent)
+	c.Ctx.Jsonp(c.Data["jsonp"], hasIndent)
 }
 
 func (c *Controller) ServeXml() {
@@ -210,17 +178,17 @@ func (c *Controller) ServeXml() {
 	} else {
 		hasIndent = true
 	}
-	c.Ctx.Output.Xml(c.Data["xml"], hasIndent)
+	c.Ctx.Xml(c.Data["xml"], hasIndent)
 }
 
 func (c *Controller) Input() url.Values {
-	ct := c.Ctx.Request.Header.Get("Content-Type")
+	ct := c.Ctx.R.Header.Get("Content-Type")
 	if strings.Contains(ct, "multipart/form-data") {
-		c.Ctx.Request.ParseMultipartForm(MaxMemory) //64MB
+		c.Ctx.R.ParseMultipartForm(MaxMemory) //64MB
 	} else {
-		c.Ctx.Request.ParseForm()
+		c.Ctx.R.ParseForm()
 	}
-	return c.Ctx.Request.Form
+	return c.Ctx.R.Form
 }
 
 func (c *Controller) ParseForm(obj interface{}) error {
@@ -232,7 +200,7 @@ func (c *Controller) GetString(key string) string {
 }
 
 func (c *Controller) GetStrings(key string) []string {
-	r := c.Ctx.Request
+	r := c.Ctx.R
 	if r.Form == nil {
 		return []string{}
 	}
@@ -256,11 +224,11 @@ func (c *Controller) GetFloat(key string) (float64, error) {
 }
 
 func (c *Controller) GetFile(key string) (multipart.File, *multipart.FileHeader, error) {
-	return c.Ctx.Request.FormFile(key)
+	return c.Ctx.R.FormFile(key)
 }
 
 func (c *Controller) SaveToFile(fromfile, tofile string) error {
-	file, _, err := c.Ctx.Request.FormFile(fromfile)
+	file, _, err := c.Ctx.R.FormFile(fromfile)
 	if err != nil {
 		return err
 	}
@@ -304,9 +272,11 @@ func (c *Controller) DelSession(name interface{}) {
 }
 */
 
+/*
 func (c *Controller) IsAjax() bool {
 	return c.Ctx.Input.IsAjax()
 }
+*/
 
 func (c *Controller) GetSecureCookie(Secret, key string) (string, bool) {
 	val := c.Ctx.GetCookie(key)
@@ -365,15 +335,17 @@ func (c *Controller) XsrfToken() string {
 func (c *Controller) CheckXsrfCookie() bool {
 	token := c.GetString("_xsrf")
 	if token == "" {
-		token = c.Ctx.Request.Header.Get("X-Xsrftoken")
+		token = c.Ctx.R.Header.Get("X-Xsrftoken")
 	}
 	if token == "" {
-		token = c.Ctx.Request.Header.Get("X-Csrftoken")
+		token = c.Ctx.R.Header.Get("X-Csrftoken")
 	}
 	if token == "" {
-		c.Ctx.Abort(403, "'_xsrf' argument missing from POST")
+		c.Ctx.SetStatus(403)
+		c.Ctx.Body([]byte("'_xsrf' argument missing from POST"))
 	} else if c._xsrf_token != token {
-		c.Ctx.Abort(403, "XSRF cookie does not match POST argument")
+		c.Ctx.SetStatus(403)
+		c.Ctx.Body([]byte("XSRF cookie does not match POST argument"))
 	}
 	return true
 }
