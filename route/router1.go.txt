@@ -1,4 +1,4 @@
-package beego
+package route
 
 import (
 	"fmt"
@@ -14,16 +14,15 @@ import (
 	"strings"
 )
 
-var HTTPMETHOD = []string{"get", "post", "put", "delete", "patch", "options", "head"}
-
 type controllerInfo struct {
 	pattern        string
 	regex          *regexp.Regexp
 	params         map[int]string
 	controllerType reflect.Type
-	methods        map[string]string
-	hasMethod      bool
 }
+
+//return false means started=true, need not continue
+type RawHttpFilterFunc func(http.ResponseWriter, *http.Request) bool
 
 type ControllerRegistor struct {
 	routers    []*controllerInfo
@@ -46,7 +45,7 @@ func NewControllerRegistor() *ControllerRegistor {
 //Add("/api/delete",&RestController{},"delete:DeleteFood")
 //Add("/api",&RestController{},"get,post:ApiFunc")
 //Add("/simple",&SimpleController{},"get:GetFunc;post:PostFunc")
-func (p *ControllerRegistor) Add(pattern string, c ControllerInterface, mappingMethods ...string) {
+func (p *ControllerRegistor) Add(pattern string, c ControllerInterface) {
 	parts := strings.Split(pattern, "/")
 
 	j := 0
@@ -133,37 +132,12 @@ func (p *ControllerRegistor) Add(pattern string, c ControllerInterface, mappingM
 	}
 	reflectVal := reflect.ValueOf(c)
 	t := reflect.Indirect(reflectVal).Type()
-	methods := make(map[string]string)
-	if len(mappingMethods) > 0 {
-		semi := strings.Split(mappingMethods[0], ";")
-		for _, v := range semi {
-			colon := strings.Split(v, ":")
-			if len(colon) != 2 {
-				panic("method mapping fomate is error")
-			}
-			comma := strings.Split(colon[0], ",")
-			for _, m := range comma {
-				if m == "*" || inSlice(strings.ToLower(m), HTTPMETHOD) {
-					if val := reflectVal.MethodByName(colon[1]); val.IsValid() {
-						methods[strings.ToLower(m)] = colon[1]
-					} else {
-						panic(colon[1] + " method don't exist in the controller " + t.Name())
-					}
-				} else {
-					panic(v + " is an error method mapping,Don't exist method named " + m)
-				}
-			}
-		}
-	}
+
 	if j == 0 {
 		//now create the Route
 		route := &controllerInfo{}
 		route.pattern = pattern
 		route.controllerType = t
-		route.methods = methods
-		if len(methods) > 0 {
-			route.hasMethod = true
-		}
 		p.fixrouters = append(p.fixrouters, route)
 	} else { // add regexp routers
 		//recreate the url pattern, with parameters replaced
@@ -182,10 +156,6 @@ func (p *ControllerRegistor) Add(pattern string, c ControllerInterface, mappingM
 		route.regex = regex
 		route.params = params
 		route.pattern = pattern
-		route.methods = methods
-		if len(methods) > 0 {
-			route.hasMethod = true
-		}
 		route.controllerType = t
 		p.routers = append(p.routers, route)
 	}

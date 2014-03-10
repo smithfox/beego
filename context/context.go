@@ -1,7 +1,10 @@
 package context
 
 import (
+	"mime/multipart"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -10,6 +13,7 @@ type Context struct {
 	W          http.ResponseWriter
 	EnableGzip bool
 	Param      map[string]string
+	formParsed bool
 	//Status         int
 }
 
@@ -28,6 +32,56 @@ func (ctx *Context) GetCookie(key string) string {
 		return ""
 	}
 	return ck.Value
+}
+
+func (ctx *Context) GetForm() url.Values {
+	if !ctx.formParsed {
+		ct := ctx.R.Header.Get("Content-Type")
+		if strings.Contains(ct, "multipart/form-data") {
+			var max_memory int64 = (1 << 26) //64MB
+			ctx.R.ParseMultipartForm(max_memory)
+		} else {
+			ctx.R.ParseForm()
+		}
+		ctx.formParsed = true
+	}
+	return ctx.R.Form
+}
+
+/*func (ctx *Context) ParseForm(obj interface{}) error {
+	return ParseForm(ctx.GetForm(), obj)
+}*/
+
+func (ctx *Context) GetString(key string) string {
+	return ctx.GetForm().Get(key)
+}
+
+func (ctx *Context) GetStrings(key string) []string {
+	r := ctx.R
+	if r.Form == nil {
+		return []string{}
+	}
+	vs := r.Form[key]
+	if len(vs) > 0 {
+		return vs
+	}
+	return []string{}
+}
+
+func (ctx *Context) GetInt(key string) (int64, error) {
+	return strconv.ParseInt(ctx.GetForm().Get(key), 10, 64)
+}
+
+func (ctx *Context) GetBool(key string) (bool, error) {
+	return strconv.ParseBool(ctx.GetForm().Get(key))
+}
+
+func (ctx *Context) GetFloat(key string) (float64, error) {
+	return strconv.ParseFloat(ctx.GetForm().Get(key), 64)
+}
+
+func (ctx *Context) GetFile(key string) (multipart.File, *multipart.FileHeader, error) {
+	return ctx.R.FormFile(key)
 }
 
 func (ctx *Context) GetHeader(key string) string {

@@ -75,7 +75,7 @@ type Manager struct {
 	//options     []interface{}
 
 	//cache options setting
-	secure   bool   //options[0]
+	secure   bool   //options[0], 为true时,只有https才传递到服务器端。http是不会传递的
 	hashfunc string //options[1], support md5 & sha1
 	hashkey  string //options[2]
 	maxage   int    //options[3]
@@ -157,7 +157,8 @@ func (manager *Manager) GetSessionCookie(r *http.Request) (string, error) {
 
 //set session cookie
 func (manager *Manager) SetSessionCookie(w http.ResponseWriter, sid string) {
-	cookie := &http.Cookie{Name: manager.cookieName,
+	cookie := &http.Cookie{
+		Name:     manager.cookieName,
 		Value:    sid,
 		Path:     "/",
 		HttpOnly: true,
@@ -172,7 +173,12 @@ func (manager *Manager) SetSessionCookie(w http.ResponseWriter, sid string) {
 //delete session cookie
 func (manager *Manager) DeleteSessionCookie(w http.ResponseWriter) {
 	expiration := time.Now()
-	cookie := http.Cookie{Name: manager.cookieName, Path: "/", HttpOnly: true, Expires: expiration, MaxAge: -1}
+	cookie := http.Cookie{
+		Name:     manager.cookieName,
+		Path:     "/",
+		HttpOnly: true,
+		Expires:  expiration,
+		MaxAge:   -1}
 	http.SetCookie(w, &cookie)
 }
 
@@ -213,7 +219,8 @@ func (manager *Manager) SetSessionExtCookie(w http.ResponseWriter, IP string, UI
 
 	value = string(bb)
 
-	cookie := &http.Cookie{Name: manager.extCookieName,
+	cookie := &http.Cookie{
+		Name:     manager.extCookieName,
 		Value:    value,
 		Path:     "/",
 		HttpOnly: true,
@@ -228,7 +235,12 @@ func (manager *Manager) SetSessionExtCookie(w http.ResponseWriter, IP string, UI
 //delete extra session cookie: IP, UID
 func (manager *Manager) DeleteSessionExtCookie(w http.ResponseWriter) {
 	expiration := time.Now()
-	cookie := http.Cookie{Name: manager.extCookieName, Path: "/", HttpOnly: true, Expires: expiration, MaxAge: -1}
+	cookie := http.Cookie{
+		Name:     manager.extCookieName,
+		Path:     "/",
+		HttpOnly: true,
+		Expires:  expiration,
+		MaxAge:   -1}
 	http.SetCookie(w, &cookie)
 }
 

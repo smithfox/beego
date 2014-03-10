@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -55,6 +54,7 @@ func (ctx *Context) Body(content []byte) {
 	}
 }
 
+/*
 func (ctx *Context) SetCookie(name string, value string, others ...interface{}) {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "%s=%s", sanitizeName(name), sanitizeValue(value))
@@ -94,6 +94,7 @@ func (ctx *Context) SetCookie(name string, value string, others ...interface{}) 
 	}
 	ctx.W.Header().Add("Set-Cookie", b.String())
 }
+*/
 
 var cookieNameSanitizer = strings.NewReplacer("\n", "-", "\r", "-")
 

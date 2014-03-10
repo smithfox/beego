@@ -2,62 +2,35 @@ package beego
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha1"
-	"encoding/base64"
+	// "crypto/hmac"
+	// "crypto/sha1"
+	// "encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/smithfox/beego/context"
-	"github.com/smithfox/beego/session"
 	"io"
 	"io/ioutil"
-	"mime/multipart"
 	"net/http"
-	"net/url"
 	"os"
-	"strconv"
-	"strings"
-	"time"
+	// "strconv"
+	// "strings"
+	// "time"
 )
 
 type Controller struct {
-	Ctx           *context.Context
-	Data          map[interface{}]interface{}
-	ChildName     string
-	TplNames      string
-	TplExt        string
-	_xsrf_token   string
-	gotofunc      string
-	XSRFExpire    int
-	AppController interface{}
+	Ctx         *context.Context
+	Data        map[interface{}]interface{}
+	TplNames    string
+	TplExt      string
+	_xsrf_token string
+	XSRFExpire  int
 }
 
-type ControllerInterface interface {
-	Init(ct *context.Context, childName string, app interface{})
-	GetSessionManager() *session.Manager
-	Prepare()
-	Get()
-	Post()
-	Delete()
-	Put()
-	Head()
-	Patch()
-	Options()
-	Finish()
-	Render() error
-}
-
-func (c *Controller) Init(ctx *context.Context, childName string, app interface{}) {
+func (c *Controller) Init(ctx *context.Context) {
 	c.Data = make(map[interface{}]interface{})
 	c.TplNames = ""
-	c.ChildName = childName
 	c.Ctx = ctx
 	c.TplExt = "tpl"
-	c.AppController = app
-}
-
-func (c *Controller) GetSessionManager() *session.Manager {
-	return GlobalSessions
 }
 
 func (c *Controller) Prepare() {
@@ -66,12 +39,6 @@ func (c *Controller) Prepare() {
 
 func (c *Controller) Finish() {
 
-}
-
-func (c *Controller) Destructor() {
-	// if c.Session != nil {
-	// 	c.Session.SessionRelease()
-	// }
 }
 
 func (c *Controller) Get() {
@@ -114,15 +81,17 @@ func (c *Controller) Render() error {
 	return nil
 }
 
+/*
 func (c *Controller) RenderString() (string, error) {
 	b, e := c.RenderBytes()
 	return string(b), e
 }
+*/
 
 func (c *Controller) RenderBytes() ([]byte, error) {
-	if c.TplNames == "" {
-		c.TplNames = c.ChildName + "/" + strings.ToLower(c.Ctx.R.Method) + "." + c.TplExt
-	}
+	// if c.TplNames == "" {
+	// 	c.TplNames = c.ChildName + "/" + strings.ToLower(c.Ctx.R.Method) + "." + c.TplExt
+	// }
 
 	ibytes := bytes.NewBufferString("")
 	if _, ok := BeeTemplates[c.TplNames]; !ok {
@@ -137,14 +106,6 @@ func (c *Controller) RenderBytes() ([]byte, error) {
 	return icontent, nil
 
 	return []byte{}, nil
-}
-
-func (c *Controller) Redirect(url string, code int) {
-	c.Ctx.Redirect(code, url)
-}
-
-func (c *Controller) Abort(code string) {
-	panic(code)
 }
 
 func (c *Controller) ServeJson(encoding ...bool) {
@@ -179,52 +140,6 @@ func (c *Controller) ServeXml() {
 		hasIndent = true
 	}
 	c.Ctx.Xml(c.Data["xml"], hasIndent)
-}
-
-func (c *Controller) Input() url.Values {
-	ct := c.Ctx.R.Header.Get("Content-Type")
-	if strings.Contains(ct, "multipart/form-data") {
-		c.Ctx.R.ParseMultipartForm(MaxMemory) //64MB
-	} else {
-		c.Ctx.R.ParseForm()
-	}
-	return c.Ctx.R.Form
-}
-
-func (c *Controller) ParseForm(obj interface{}) error {
-	return ParseForm(c.Input(), obj)
-}
-
-func (c *Controller) GetString(key string) string {
-	return c.Input().Get(key)
-}
-
-func (c *Controller) GetStrings(key string) []string {
-	r := c.Ctx.R
-	if r.Form == nil {
-		return []string{}
-	}
-	vs := r.Form[key]
-	if len(vs) > 0 {
-		return vs
-	}
-	return []string{}
-}
-
-func (c *Controller) GetInt(key string) (int64, error) {
-	return strconv.ParseInt(c.Input().Get(key), 10, 64)
-}
-
-func (c *Controller) GetBool(key string) (bool, error) {
-	return strconv.ParseBool(c.Input().Get(key))
-}
-
-func (c *Controller) GetFloat(key string) (float64, error) {
-	return strconv.ParseFloat(c.Input().Get(key), 64)
-}
-
-func (c *Controller) GetFile(key string) (multipart.File, *multipart.FileHeader, error) {
-	return c.Ctx.R.FormFile(key)
 }
 
 func (c *Controller) SaveToFile(fromfile, tofile string) error {
@@ -277,7 +192,7 @@ func (c *Controller) IsAjax() bool {
 	return c.Ctx.Input.IsAjax()
 }
 */
-
+/*
 func (c *Controller) GetSecureCookie(Secret, key string) (string, bool) {
 	val := c.Ctx.GetCookie(key)
 	if val == "" {
@@ -313,7 +228,9 @@ func (c *Controller) SetSecureCookie(Secret, name, val string, age int64) {
 	cookie := strings.Join([]string{vs, timestamp, sig}, "|")
 	c.Ctx.SetCookie(name, cookie, age, "/")
 }
+*/
 
+/*
 func (c *Controller) XsrfToken() string {
 	if c._xsrf_token == "" {
 		token, ok := c.GetSecureCookie(XSRFKEY, "_xsrf")
@@ -333,12 +250,12 @@ func (c *Controller) XsrfToken() string {
 }
 
 func (c *Controller) CheckXsrfCookie() bool {
-	token := c.GetString("_xsrf")
+	token := c.Ctx.GetString("_xsrf")
 	if token == "" {
-		token = c.Ctx.R.Header.Get("X-Xsrftoken")
+		token = c.Ctx.GetHeader("X-Xsrftoken")
 	}
 	if token == "" {
-		token = c.Ctx.R.Header.Get("X-Csrftoken")
+		token = c.Ctx.GetHeader("X-Csrftoken")
 	}
 	if token == "" {
 		c.Ctx.SetStatus(403)
@@ -354,10 +271,4 @@ func (c *Controller) XsrfFormHtml() string {
 	return "<input type=\"hidden\" name=\"_xsrf\" value=\"" +
 		c._xsrf_token + "\"/>"
 }
-
-func (c *Controller) GoToFunc(funcname string) {
-	if funcname[0] < 65 || funcname[0] > 90 {
-		panic("GoToFunc should exported function")
-	}
-	c.gotofunc = funcname
-}
+*/

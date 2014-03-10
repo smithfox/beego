@@ -2,16 +2,13 @@ package beego
 
 import (
 	"github.com/smithfox/beego/config"
-	"github.com/smithfox/beego/session"
 	"html/template"
 	"os"
 	"path"
-	//"runtime"
 	"strconv"
 )
 
 var (
-	BeeApp        *App
 	AppName       string
 	AppPath       string
 	AppConfigPath string
@@ -30,12 +27,11 @@ var (
 	RunMode       string //"dev" or "prod"
 	AppConfig     config.ConfigContainer
 	//related to session
-	GlobalSessions       *session.Manager //GlobalSessions
-	SessionOn            bool             // whether auto start session,default is false
-	SessionProvider      string           // default session provider  memory mysql redis
-	SessionName          string           // sessionName cookie's name
-	SessionGCMaxLifetime int64            // session's gc maxlifetime
-	SessionSavePath      string           // session savepath if use mysql/redis/file this set to the connectinfo
+	SessionOn            bool   // whether auto start session,default is false
+	SessionProvider      string // default session provider  memory mysql redis
+	SessionName          string // sessionName cookie's name
+	SessionGCMaxLifetime int64  // session's gc maxlifetime
+	SessionSavePath      string // session savepath if use mysql/redis/file this set to the connectinfo
 
 	MaxMemory         int64
 	EnableGzip        bool   // enable gzip
@@ -50,8 +46,6 @@ var (
 )
 
 func init() {
-	os.Chdir(path.Dir(os.Args[0]))
-	BeeApp = NewApp()
 	AppPath, _ = os.Getwd()
 	StaticDir = make(map[string]string)
 	TemplateCache = make(map[string]*template.Template)
@@ -63,7 +57,7 @@ func init() {
 	AutoRender = true
 	RecoverPanic = true
 	PprofOn = false
-	ViewsPath = "views"
+	ViewsPath = "template"
 	SessionOn = false
 	SessionProvider = "memory"
 	SessionName = "beegosessionID"
