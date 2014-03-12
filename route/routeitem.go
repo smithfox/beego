@@ -68,6 +68,11 @@ type RouteItem struct {
 	// onlyscheme=https, http will force redirect to https
 	// otherwise, ignore
 	onlyscheme string
+
+	//POST/DEL/PUT auto forcely check csrf, the option means GET check
+	checkCsrf bool
+
+	checkAuth bool
 }
 
 // Match matches the route against the request.
@@ -101,6 +106,8 @@ func (r *RouteItem) Match(req *http.Request, match *RouteMatch) bool {
 	}
 
 	match.OnlyScheme = r.onlyscheme
+	match.CheckAuth = r.checkAuth
+	match.CheckCsrf = r.checkCsrf
 	return true
 }
 
@@ -371,6 +378,16 @@ func (r *RouteItem) Queries(pairs ...string) *RouteItem {
 // Schemes --------------------------------------------------------------------
 func (r *RouteItem) OnlyScheme(scheme string) *RouteItem {
 	r.onlyscheme = strings.ToLower(scheme)
+	return r
+}
+
+func (r *RouteItem) CheckCsrf() *RouteItem {
+	r.checkCsrf = true
+	return r
+}
+
+func (r *RouteItem) CheckAuth() *RouteItem {
+	r.checkAuth = true
 	return r
 }
 

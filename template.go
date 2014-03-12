@@ -1,236 +1,218 @@
+//copy from https://github.com/codegangsta/martini-contrib/blob/master/render/render.go
 package beego
 
-//@todo add template funcs
-
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"html/template"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 )
 
-var (
-	beegoTplFuncMap template.FuncMap
-	BeeTemplates    map[string]*template.Template
-	BeeTemplateExt  []string
-)
+// Included helper functions for use when rendering html
+var helperFuncs = template.FuncMap{
+	"yield": func() (string, error) {
+		return "", fmt.Errorf("yield called with no layout defined")
+	},
+}
 
-func init() {
-	BeeTemplates = make(map[string]*template.Template)
-	beegoTplFuncMap = make(template.FuncMap)
-	BeeTemplateExt = make([]string, 0)
-	BeeTemplateExt = append(BeeTemplateExt, "tpl", "html")
-	beegoTplFuncMap["dateformat"] = DateFormat
-	beegoTplFuncMap["date"] = Date
-	beegoTplFuncMap["compare"] = Compare
-	beegoTplFuncMap["substr"] = Substr
-	beegoTplFuncMap["html2str"] = Html2str
-	beegoTplFuncMap["str2html"] = Str2html
-	beegoTplFuncMap["htmlquote"] = Htmlquote
-	beegoTplFuncMap["htmlunquote"] = Htmlunquote
-	beegoTplFuncMap["renderform"] = RenderForm
-	/*
-		// go1.2 added template funcs
-		// Comparisons
-		beegoTplFuncMap["eq"] = eq // ==
-		beegoTplFuncMap["ge"] = ge // >=
-		beegoTplFuncMap["gt"] = gt // >
-		beegoTplFuncMap["le"] = le // <=
-		beegoTplFuncMap["lt"] = lt // <
-		beegoTplFuncMap["ne"] = ne // !=
+var gRenderer *renderer
 
-		beegoTplFuncMap["urlfor"] = UrlFor // !=
-	*/
+// Delims represents a set of Left and Right delimiters for HTML template rendering
+type Delims struct {
+	// Left delimiter, defaults to {{
+	Left string
+	// Right delimiter, defaults to }}
+	Right string
+}
+
+// Options is a struct for specifying configuration options for the render.Renderer middleware
+type Options struct {
+	// Directory to load templates. Default is "templates"
+	Directory string
+	// Layout template name. Will not render a layout if "". Defaults to "".
+	Layout string
+	// Extensions to parse template files from. Defaults to [".tmpl"]
+	Extensions []string
+	// Funcs is a slice of FuncMaps to apply to the template upon compilation. This is useful for helper functions. Defaults to [].
+	Funcs []template.FuncMap
+	// Delims sets the action delimiters to the specified strings in the Delims struct.
+	Delims Delims
+	// Appends the given charset to the Content-Type header. Default is "UTF-8".
+	Charset string
+	// Outputs human readable JSON
+	IndentJSON bool
+}
+
+// RenderOptions is a struct for overriding some rendering Options
+type RenderOptions struct {
+	// Layout template name. Overrides Options.Layout.
+	Layout string
+}
+
+func buildFuncs() {
+	helperFuncs["dateformat"] = DateFormat
+	helperFuncs["date"] = Date
+	helperFuncs["compare"] = Compare
+	helperFuncs["substr"] = Substr
+	helperFuncs["html2str"] = Html2str
+	helperFuncs["str2html"] = Str2html
+	helperFuncs["htmlquote"] = Htmlquote
+	helperFuncs["htmlunquote"] = Htmlunquote
+	helperFuncs["renderform"] = RenderForm
 }
 
 // AddFuncMap let user to register a func in the template
 func AddFuncMap(key string, funname interface{}) error {
-	if _, ok := beegoTplFuncMap[key]; ok {
+	if _, ok := helperFuncs[key]; ok {
 		return errors.New("funcmap already has the key")
 	}
-	beegoTplFuncMap[key] = funname
+	helperFuncs[key] = funname
 	return nil
-}
-
-type templatefile struct {
-	root  string
-	files []string
-}
-
-func (self *templatefile) visit(paths string, f os.FileInfo, err error) error {
-	if f == nil {
-		return err
-	}
-	if f.IsDir() || (f.Mode()&os.ModeSymlink) > 0 {
-		return nil
-	}
-
-	if !HasTemplateExt(paths) {
-		return nil
-	}
-
-	replace := strings.NewReplacer("\\", "/")
-	a := []byte(paths)
-	a = a[len([]byte(self.root)):]
-	file := strings.TrimLeft(replace.Replace(string(a)), "/")
-
-	self.files = append(self.files, file)
-
-	return nil
-}
-
-func HasTemplateExt(paths string) bool {
-	for _, v := range BeeTemplateExt {
-		if strings.HasSuffix(paths, "."+v) {
-			return true
-		}
-	}
-	return false
-}
-
-func AddTemplateExt(ext string) {
-	for _, v := range BeeTemplateExt {
-		if v == ext {
-			return
-		}
-	}
-	BeeTemplateExt = append(BeeTemplateExt, ext)
 }
 
 func BuildTemplate(dir string) error {
-	if _, err := os.Stat(dir); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		} else {
-			return errors.New("dir open err")
-		}
-	}
-	self := &templatefile{
-		root:  dir,
-		files: make([]string, 0),
-	}
-	err := filepath.Walk(dir, func(path string, f os.FileInfo, err error) error {
-		return self.visit(path, f, err)
-	})
-	if err != nil {
-		fmt.Printf("filepath.Walk() returned %v\n", err)
-		return err
-	}
-	for _, file := range self.files {
-
-		t, err := getTemplate(self.root, file, self.files...)
-		if err != nil {
-			fmt.Printf("Parse Template %s err=%v\n", file, err)
-		} else {
-			BeeTemplates[file] = t
-		}
-
-	}
+	var opt Options
+	opt.Directory = dir
+	BuildTemplateWithOption(opt)
 	return nil
 }
 
-func getTplDeep(root, file, parent string, t *template.Template) (*template.Template, [][]string, error) {
-	var fileabspath string
-	if filepath.HasPrefix(file, "../") {
-		fileabspath = filepath.Join(root, filepath.Dir(parent), file)
-	} else {
-		fileabspath = filepath.Join(root, file)
+func BuildTemplateWithOption(options ...Options) {
+	buildFuncs()
+	opt := prepareOptions(options)
+	t := compile(opt)
+	gRenderer = &renderer{t, opt}
+}
+
+func RenderTemplate(tplName string, binding interface{}, renderOpt ...RenderOptions) (*bytes.Buffer, error) {
+	return gRenderer.renderhtml(tplName, binding, renderOpt...)
+}
+
+func prepareOptions(options []Options) Options {
+	var opt Options
+	if len(options) > 0 {
+		opt = options[0]
 	}
-	if bb, _ := FileExists(fileabspath); !bb {
-		panic("can't find template file" + file)
+
+	// Defaults
+	if len(opt.Directory) == 0 {
+		opt.Directory = "template"
 	}
-	data, err := ioutil.ReadFile(fileabspath)
-	if err != nil {
-		return nil, [][]string{}, err
+	if len(opt.Extensions) == 0 {
+		opt.Extensions = []string{".tpl"}
 	}
-	t, err = t.New(file).Parse(string(data))
-	if err != nil {
-		return nil, [][]string{}, err
-	}
-	reg := regexp.MustCompile(TemplateLeft + "[ ]*template[ ]+\"([^\"]+)\"")
-	allsub := reg.FindAllStringSubmatch(string(data), -1)
-	for _, m := range allsub {
-		if len(m) == 2 {
-			tlook := t.Lookup(m[1])
-			if tlook != nil {
-				continue
-			}
-			if !HasTemplateExt(m[1]) {
-				continue
-			}
-			t, _, err = getTplDeep(root, m[1], file, t)
-			if err != nil {
-				return nil, [][]string{}, err
-			}
+
+	return opt
+}
+
+func compile(options Options) *template.Template {
+	dir := options.Directory
+	t := template.New(dir)
+	t.Delims(options.Delims.Left, options.Delims.Right)
+	// parse an initial template in case we don't have any
+	template.Must(t.Parse("Martini"))
+
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		r, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
 		}
-	}
-	return t, allsub, nil
-}
 
-func getTemplate(root, file string, others ...string) (t *template.Template, err error) {
-	t = template.New(file).Delims(TemplateLeft, TemplateRight).Funcs(beegoTplFuncMap)
-	var submods [][]string
-	t, submods, err = getTplDeep(root, file, "", t)
-	if err != nil {
-		return nil, err
-	}
-	t, err = _getTemplate(t, root, submods, others...)
+		ext := filepath.Ext(r)
+		for _, extension := range options.Extensions {
+			if ext == extension {
 
-	if err != nil {
-		return nil, err
-	}
-	return
-}
-
-func _getTemplate(t0 *template.Template, root string, submods [][]string, others ...string) (t *template.Template, err error) {
-	t = t0
-	for _, m := range submods {
-		if len(m) == 2 {
-			templ := t.Lookup(m[1])
-			if templ != nil {
-				continue
-			}
-			//first check filename
-			for _, otherfile := range others {
-				if otherfile == m[1] {
-					var submods1 [][]string
-					t, submods1, err = getTplDeep(root, otherfile, "", t)
-					if err != nil {
-						fmt.Printf("Beego Template getTplDeep %s err=%v\n", otherfile, err)
-					} else if submods1 != nil && len(submods1) > 0 {
-						t, err = _getTemplate(t, root, submods1, others...)
-					}
-					break
-				}
-			}
-			//second check define
-			for _, otherfile := range others {
-				fileabspath := filepath.Join(root, otherfile)
-				data, err := ioutil.ReadFile(fileabspath)
+				buf, err := ioutil.ReadFile(path)
 				if err != nil {
-					continue
+					panic(err)
 				}
-				reg := regexp.MustCompile(TemplateLeft + "[ ]*define[ ]+\"([^\"]+)\"")
-				allsub := reg.FindAllStringSubmatch(string(data), -1)
-				for _, sub := range allsub {
-					if len(sub) == 2 && sub[1] == m[1] {
-						var submods1 [][]string
-						t, submods1, err = getTplDeep(root, otherfile, "", t)
-						if err != nil {
-							fmt.Printf("Beego Template getTplDeep %s err=%v\n", otherfile, err)
-						} else if submods1 != nil && len(submods1) > 0 {
-							t, err = _getTemplate(t, root, submods1, others...)
-						}
-						break
+
+				name := (r[0 : len(r)-len(ext)])
+				fname := filepath.ToSlash(r)
+				name = filepath.ToSlash(name)
+				tmpl := template.New(name)
+
+				// add our funcmaps
+				for _, funcs := range options.Funcs {
+					tmpl.Funcs(funcs)
+				}
+
+				template.Must(tmpl.Funcs(helperFuncs).Parse(string(buf)))
+
+				t.AddParseTree(name, tmpl.Tree)
+				t.AddParseTree(fname, tmpl.Tree)
+				/*
+					tmpl := t.New()
+
+					// add our funcmaps
+					for _, funcs := range options.Funcs {
+						tmpl.Funcs(funcs)
 					}
-				}
+
+					// Bomb out if parse fails. We don't want any silent server starts.
+					template.Must(tmpl.Funcs(helperFuncs).Parse(string(buf)))
+				*/
+				break
 			}
 		}
 
+		return nil
+	})
+
+	for _, funcs := range options.Funcs {
+		t.Funcs(funcs)
 	}
-	return
+
+	t.Funcs(helperFuncs)
+
+	return t
+}
+
+type renderer struct {
+	t   *template.Template
+	opt Options
+}
+
+func (r *renderer) renderhtml(name string, binding interface{}, renderOpt ...RenderOptions) (*bytes.Buffer, error) {
+	opt := r.prepareRenderOptions(renderOpt)
+	// assign a layout if there is one
+	if len(opt.Layout) > 0 {
+		r.addYield(name, binding)
+		name = opt.Layout
+	}
+
+	return r.execute(name, binding)
+}
+
+func (r *renderer) Template() *template.Template {
+	return r.t
+}
+
+func (r *renderer) execute(name string, binding interface{}) (*bytes.Buffer, error) {
+	buf := new(bytes.Buffer)
+	return buf, r.t.ExecuteTemplate(buf, name, binding)
+}
+
+func (r *renderer) addYield(name string, binding interface{}) {
+	funcs := template.FuncMap{
+		"yield": func() (template.HTML, error) {
+			buf, err := r.execute(name, binding)
+			// return safe html here since we are rendering our own template
+			return template.HTML(buf.String()), err
+		},
+	}
+	r.t.Funcs(funcs)
+}
+
+func (r *renderer) prepareRenderOptions(renderOpt []RenderOptions) RenderOptions {
+	if len(renderOpt) > 0 {
+		return renderOpt[0]
+	}
+
+	return RenderOptions{
+		Layout: r.opt.Layout,
+	}
 }

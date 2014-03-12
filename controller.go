@@ -1,11 +1,11 @@
 package beego
 
 import (
-	"bytes"
+	//"bytes"
 	// "crypto/hmac"
 	// "crypto/sha1"
 	// "encoding/base64"
-	"errors"
+	//"errors"
 	"fmt"
 	"github.com/smithfox/beego/context"
 	"io"
@@ -36,7 +36,12 @@ func (c *Controller) Init(ctx *context.Context) {
 func (c *Controller) Prepare() {
 
 }
-
+func (c *Controller) CheckAuth() bool {
+	return true
+}
+func (c *Controller) CheckCsrf() bool {
+	return true
+}
 func (c *Controller) Finish() {
 
 }
@@ -75,6 +80,15 @@ func (c *Controller) Render() error {
 	if err != nil {
 		return err
 	} else {
+		//DENY ： 不允许被任何页面嵌入；
+		//SAMEORIGIN ： 不允许被本域以外的页面嵌入；
+		//ALLOW-FROM uri： 不允许被指定的域名以外的页面嵌入（Chrome现阶段不支持）
+		c.Ctx.SetHeader("X-Frame-Options", "DENY")
+		c.Ctx.SetHeader("X-XSS-Protection", "1; mode=block")
+		c.Ctx.SetHeader("X-Content-Type-Options", "nosniff")
+		c.Ctx.SetHeader("Content-Type-Options", "nosniff")
+		//c.Ctx.SetHeader("Content-Security-Policy", "default-src 'self'")
+
 		c.Ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
 		c.Ctx.Body(rb)
 	}
@@ -93,19 +107,12 @@ func (c *Controller) RenderBytes() ([]byte, error) {
 	// 	c.TplNames = c.ChildName + "/" + strings.ToLower(c.Ctx.R.Method) + "." + c.TplExt
 	// }
 
-	ibytes := bytes.NewBufferString("")
-	if _, ok := BeeTemplates[c.TplNames]; !ok {
-		panic("can't find templatefile in the path:" + c.TplNames)
-		return []byte{}, errors.New("can't find templatefile in the path:" + c.TplNames)
-	}
-	err := BeeTemplates[c.TplNames].ExecuteTemplate(ibytes, c.TplNames, c.Data)
+	ibytes, err := RenderTemplate(c.TplNames, c.Data)
 	if err != nil {
 		fmt.Printf("Beego ExecuteTemplate %s err=%v\n", c.TplNames, err)
 	}
 	icontent, _ := ioutil.ReadAll(ibytes)
 	return icontent, nil
-
-	return []byte{}, nil
 }
 
 func (c *Controller) ServeJson(encoding ...bool) {

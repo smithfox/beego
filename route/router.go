@@ -2,7 +2,9 @@ package route
 
 import (
 	"fmt"
-	//beecontext "github.com/smithfox/beego/context"
+	"github.com/smithfox/beego/context"
+	"github.com/smithfox/beego/recovery"
+	"log"
 	"net/http"
 	"path"
 	"reflect"
@@ -46,13 +48,21 @@ func (r *Router) Match(req *http.Request, match *RouteMatch) bool {
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	defer func() {
+		if err := recover(); err != nil {
+			stack := recovery.Stack(0)
+			log.Printf("Router ServeHTTP PANIC: %s\n%s\n", err, stack)
+		}
+	}()
+
+	//debug.PrintStack()
+	//fmt.Printf("router ServeHTTP, url=%q\n", req.URL)
 	for _, filter := range r.filters {
 		if ok := filter.FilterHTTP(w, req); !ok {
 			return
 		}
 	}
 
-	fmt.Printf("router ServeHTTP 1\n")
 	var match RouteMatch
 	var handler http.Handler
 	if r.Match(req, &match) {
@@ -74,12 +84,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if redirectURL != "" {
-		fmt.Printf("Router ServeHTTP redirectURL=%s, match.OnlyScheme=%s,req.TLS=%p\n", redirectURL, match.OnlyScheme, req.TLS)
+		fmt.Printf("Router ServeHTTP redirectURL=%s, match.OnlyScheme=%s,req.TLS=%t\n", redirectURL, match.OnlyScheme, (req.TLS != nil))
 		http.Redirect(w, req, redirectURL, http.StatusMovedPermanently)
 		return
 	}
 	//}}
-	fmt.Printf("router ServeHTTP 2\n")
+
 	if match.Controller != nil {
 		/*
 			hc := &HandlerController{}
@@ -96,8 +106,15 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			hc.context.Param = match.Vars
 			hc.ServerHTTP(w, req)
 		*/
-		controllerHTTP(match.CType, match.Vars, w, req)
-		fmt.Printf("router ServeHTTP 3\n")
+		context := &context.Context{
+			W:          w,
+			R:          req,
+			Param:      match.Vars,
+			EnableGzip: true,
+		}
+
+		controllerHTTP(&match, context)
+
 	} else {
 		if handler == nil {
 			if r.NotFoundHandler == nil {
@@ -107,7 +124,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		handler.ServeHTTP(w, req)
 	}
-	fmt.Printf("router ServeHTTP 4\n")
+
 }
 
 func (r *Router) Controller(path string, c ControllerInterface) *RouteItem {
@@ -186,6 +203,8 @@ type RouteMatch struct {
 	CType      reflect.Type
 	Vars       map[string]string
 	OnlyScheme string
+	CheckCsrf  bool
+	CheckAuth  bool
 }
 
 // ----------------------------------------------------------------------------

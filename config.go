@@ -12,7 +12,6 @@ var (
 	AppName       string
 	AppPath       string
 	AppConfigPath string
-	StaticDir     map[string]string
 	TemplateCache map[string]*template.Template
 	HttpAddr      string
 	HttpPort      int
@@ -47,7 +46,6 @@ var (
 
 func init() {
 	AppPath, _ = os.Getwd()
-	StaticDir = make(map[string]string)
 	TemplateCache = make(map[string]*template.Template)
 	HttpAddr = ""
 	HttpPort = 8080
@@ -65,7 +63,6 @@ func init() {
 	SessionSavePath = ""
 	MaxMemory = 1 << 26 //64MB
 	EnableGzip = false
-	StaticDir["/static"] = "static"
 	AppConfigPath = path.Join(AppPath, "conf", "app.conf")
 	HttpServerTimeOut = 0
 	ErrorsShow = true

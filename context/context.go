@@ -34,7 +34,7 @@ func (ctx *Context) GetCookie(key string) string {
 	return ck.Value
 }
 
-func (ctx *Context) GetForm() url.Values {
+func (ctx *Context) _parseform() {
 	if !ctx.formParsed {
 		ct := ctx.R.Header.Get("Content-Type")
 		if strings.Contains(ct, "multipart/form-data") {
@@ -45,6 +45,15 @@ func (ctx *Context) GetForm() url.Values {
 		}
 		ctx.formParsed = true
 	}
+}
+
+func (ctx *Context) GetPostForm() url.Values {
+	ctx._parseform()
+	return ctx.R.PostForm
+}
+
+func (ctx *Context) GetForm() url.Values {
+	ctx._parseform()
 	return ctx.R.Form
 }
 

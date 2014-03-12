@@ -1,8 +1,8 @@
 package route
 
 import (
-	beecontext "github.com/smithfox/beego/context"
-	"net/http"
+	"github.com/smithfox/beego/context"
+	//"net/http"
 	"reflect"
 )
 
@@ -108,17 +108,24 @@ func (c *HandlerController) Options() {
 }
 */
 
-func controllerHTTP(cType reflect.Type, params map[string]string, w http.ResponseWriter, r *http.Request) {
-	context := &beecontext.Context{
-		W: w,
-		R: r,
-	}
-	//context.EnableGzip = EnableGzip
-	context.EnableGzip = true
-	context.Param = params
+var noparams []reflect.Value = []reflect.Value{}
 
+func callVoidMethod(vc reflect.Value, name string) {
+	method := vc.MethodByName(name)
+	method.Call(noparams)
+}
+
+func callBoolMethod(vc reflect.Value, name string) bool {
+	method := vc.MethodByName(name)
+	out := method.Call(noparams)
+	ff := out[0].Interface().(bool)
+	return ff
+}
+
+func controllerHTTP(match *RouteMatch, context *context.Context) {
+	r := context.R
 	//Invoke the request handler
-	vc := reflect.New(cType)
+	vc := reflect.New(match.CType)
 
 	//call the controller init function
 	method := vc.MethodByName("Init")
@@ -131,29 +138,43 @@ func controllerHTTP(cType reflect.Type, params map[string]string, w http.Respons
 	method = vc.MethodByName("Prepare")
 	method.Call(in)
 
-	if r.Method == "GET" {
-		method = vc.MethodByName("Get")
-		method.Call(in)
-	} else if r.Method == "HEAD" {
-		method = vc.MethodByName("Head")
-		method.Call(in)
-	} else if r.Method == "DELETE" || (r.Method == "POST" && r.Form.Get("_method") == "delete") {
-		method = vc.MethodByName("Delete")
-		method.Call(in)
-	} else if r.Method == "PUT" || (r.Method == "POST" && r.Form.Get("_method") == "put") {
-		method = vc.MethodByName("Put")
-		method.Call(in)
-	} else if r.Method == "POST" {
-		method = vc.MethodByName("Post")
-		method.Call(in)
-	} else if r.Method == "PATCH" {
-		method = vc.MethodByName("Patch")
-		method.Call(in)
-	} else if r.Method == "OPTIONS" {
-		method = vc.MethodByName("Options")
-		method.Call(in)
+	if match.CheckAuth {
+		passed := callBoolMethod(vc, "CheckAuth")
+		if !passed {
+			return
+		}
 	}
 
-	method = vc.MethodByName("Finish")
-	method.Call(in)
+	if r.Method == "GET" {
+		if match.CheckCsrf {
+			passed := callBoolMethod(vc, "CheckCsrf")
+			if !passed {
+				return
+			}
+		}
+		callVoidMethod(vc, "Get")
+	} else if r.Method == "HEAD" {
+		callVoidMethod(vc, "Head")
+	} else if r.Method == "DELETE" || (r.Method == "POST" && r.Form.Get("_method") == "delete") {
+		if !callBoolMethod(vc, "CheckCsrf") {
+			return
+		}
+		callVoidMethod(vc, "Delete")
+	} else if r.Method == "PUT" || (r.Method == "POST" && r.Form.Get("_method") == "put") {
+		if !callBoolMethod(vc, "CheckCsrf") {
+			return
+		}
+		callVoidMethod(vc, "Put")
+	} else if r.Method == "POST" {
+		if !callBoolMethod(vc, "CheckCsrf") {
+			return
+		}
+		callVoidMethod(vc, "Post")
+	} else if r.Method == "PATCH" {
+		callVoidMethod(vc, "Patch")
+	} else if r.Method == "OPTIONS" {
+		callVoidMethod(vc, "Options")
+	}
+
+	callVoidMethod(vc, "Finish")
 }
