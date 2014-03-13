@@ -18,19 +18,28 @@ import (
 )
 
 type Controller struct {
-	Ctx         *context.Context
-	Data        map[interface{}]interface{}
-	TplNames    string
-	TplExt      string
-	_xsrf_token string
-	XSRFExpire  int
+	Ctx      *context.Context
+	Data     map[interface{}]interface{}
+	TplNames string
+	TplExt   string
+	_inited  bool
+	// _xsrf_token string
+	// XSRFExpire  int
 }
 
 func (c *Controller) Init(ctx *context.Context) {
+	if c._inited {
+		return
+	}
 	c.Data = make(map[interface{}]interface{})
 	c.TplNames = ""
 	c.Ctx = ctx
 	c.TplExt = "tpl"
+	c._inited = true
+}
+
+func (c *Controller) Context() *context.Context {
+	return c.Ctx
 }
 
 func (c *Controller) Prepare() {

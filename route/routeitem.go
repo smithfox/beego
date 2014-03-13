@@ -7,29 +7,12 @@ package route
 import (
 	"errors"
 	"fmt"
-	//beecontext "github.com/smithfox/beego/context"
+	"github.com/smithfox/beego/context"
 	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
 )
-
-type ControllerInterface interface{}
-
-/*
-type ControllerInterface interface {
-	Init(*beecontext.Context)
-	Prepare()
-	Finish()
-	Get()
-	Post()
-	Delete()
-	Put()
-	Head()
-	Patch()
-	Options()
-}
-*/
 
 type FilterFunc func(http.ResponseWriter, *http.Request) bool
 
@@ -46,9 +29,8 @@ type RouteItem struct {
 	// Request handler for the route.
 	handler http.Handler
 
-	//controller
-	cType      reflect.Type
-	controller ControllerInterface
+	//NewController
+	newControllerHandler NewControllerHandlerFunc
 
 	// List of matchers.
 	matchers []matcher
@@ -90,9 +72,8 @@ func (r *RouteItem) Match(req *http.Request, match *RouteMatch) bool {
 	if match.RouteItem == nil {
 		match.RouteItem = r
 	}
-	if match.Controller == nil {
-		match.Controller = r.controller
-		match.CType = r.cType
+	if match.NewControllerHandler == nil {
+		match.NewControllerHandler = r.newControllerHandler
 	}
 	if match.Handler == nil {
 		match.Handler = r.handler
@@ -143,14 +124,34 @@ func InterfaceOf(value interface{}) reflect.Type {
 }
 */
 
-func (r *RouteItem) Controller(c ControllerInterface) *RouteItem {
+func (r *RouteItem) ControllerFunc(f func() Controller) *RouteItem {
 	if r.err == nil {
 		//默认 controller 都是 http, 可以通过 OnlyScheme() 来改变
 		r.onlyscheme = "http"
-		r.controller = c
-		//r.cType = InterfaceOf(c)
+
+		r.newControllerHandler = func(c *context.Context) ControllerHandler {
+			fmt.Printf("RouteItem.newControllerHandler\n")
+			ci := f()
+			ci.Init(c)
+			return &WrapperController{Controller: ci}
+		}
+	}
+	return r
+}
+
+func (r *RouteItem) Controller(c Controller) *RouteItem {
+	if r.err == nil {
+		//默认 controller 都是 http, 可以通过 OnlyScheme() 来改变
+		r.onlyscheme = "http"
+
 		reflectVal := reflect.ValueOf(c)
-		r.cType = reflect.Indirect(reflectVal).Type()
+		cType := reflect.Indirect(reflectVal).Type()
+		vc := reflect.New(cType)
+
+		//vc := reflect.New(reflect.TypeOf(c))
+		r.newControllerHandler = func(c *context.Context) ControllerHandler {
+			return WrapperControllerHandler(vc, c)
+		}
 	}
 	return r
 }

@@ -1,180 +1,185 @@
 package route
 
 import (
+	"fmt"
 	"github.com/smithfox/beego/context"
-	//"net/http"
+	"net/http"
 	"reflect"
 )
 
-/*
-type HandlerController struct {
-	ci      ControllerInterface
-	context *beecontext.Context
+type ControllerOption struct {
+	AuthAny bool
+	CrsfAny bool
 }
 
-func (c *HandlerController) ServerHTTP(w http.ResponseWriter, r *http.Request) {
-	if c.ci == nil {
-		return
-	}
-	c.ci.Init(c.context)
-	c.ci.Prepare()
-
-	if r.Method == "GET" {
-		c.ci.Get()
-	} else if r.Method == "HEAD" {
-		c.ci.Head()
-	} else if r.Method == "DELETE" || (r.Method == "POST" && r.Form.Get("_method") == "delete") {
-		c.ci.Delete()
-	} else if r.Method == "PUT" || (r.Method == "POST" && r.Form.Get("_method") == "put") {
-		c.ci.Put()
-	} else if r.Method == "POST" {
-		c.ci.Post()
-	} else if r.Method == "PATCH" {
-		c.ci.Patch()
-	} else if r.Method == "OPTIONS" {
-		c.ci.Options()
-	}
-
-	c.ci.Finish()
+type Controller interface {
+	Context() *context.Context
+	Init(*context.Context)
+	CheckCsrf() bool
+	CheckAuth() bool
+	Prepare()
+	Get()
+	Post()
+	Delete()
+	Put()
+	Head()
+	Patch()
+	Options()
+	Finish()
 }
 
-
-func (c *HandlerController) Prepare() {
-	if c.ci != nil {
-		c.ci.Prepare()
-	}
+//即实现了 Controller, 也实现了 ServerHTTP
+type ControllerHandler interface {
+	Controller
+	http.Handler
 }
-
-func (c *HandlerController) Finish() {
-	if c.ci != nil {
-		c.ci.Finish()
-	}
-}
-
-func (c *HandlerController) Get() {
-	if c.ci != nil {
-		c.ci.Get()
-	} else {
-		http.Error(c.Ctx.W, "Method Not Allowed", 405)
-	}
-}
-
-func (c *HandlerController) Post() {
-	if c.ci != nil {
-		c.ci.Post()
-	} else {
-		http.Error(c.Ctx.W, "Method Not Allowed", 405)
-	}
-}
-
-func (c *HandlerController) Delete() {
-	if c.ci != nil {
-		c.ci.Delete()
-	} else {
-		http.Error(c.Ctx.W, "Method Not Allowed", 405)
-	}
-}
-
-func (c *HandlerController) Put() {
-	if c.ci != nil {
-		c.ci.Put()
-	} else {
-		http.Error(c.Ctx.W, "Method Not Allowed", 405)
-	}
-}
-
-func (c *HandlerController) Head() {
-	if c.ci != nil {
-		c.ci.Head()
-	} else {
-		http.Error(c.Ctx.W, "Method Not Allowed", 405)
-	}
-}
-
-func (c *HandlerController) Patch() {
-	if c.ci != nil {
-		c.ci.Patch()
-	} else {
-		http.Error(c.Ctx.W, "Method Not Allowed", 405)
-	}
-}
-
-func (c *HandlerController) Options() {
-	if c.ci != nil {
-		c.ci.Options()
-	} else {
-		http.Error(c.Ctx.W, "Method Not Allowed", 405)
-	}
-}
-*/
 
 var noparams []reflect.Value = []reflect.Value{}
 
-func callVoidMethod(vc reflect.Value, name string) {
-	method := vc.MethodByName(name)
+type NewControllerHandlerFunc func(*context.Context) ControllerHandler
+
+type reflectWrapperController struct {
+	vc      reflect.Value
+	context *context.Context
+	option  ControllerOption
+}
+
+func (c *reflectWrapperController) callVoidMethod(name string) {
+	method := c.vc.MethodByName(name)
 	method.Call(noparams)
 }
 
-func callBoolMethod(vc reflect.Value, name string) bool {
-	method := vc.MethodByName(name)
+func (c *reflectWrapperController) callBoolMethod(name string) bool {
+	method := c.vc.MethodByName(name)
 	out := method.Call(noparams)
 	ff := out[0].Interface().(bool)
 	return ff
 }
 
-func controllerHTTP(match *RouteMatch, context *context.Context) {
-	r := context.R
-	//Invoke the request handler
-	vc := reflect.New(match.CType)
+func (c *reflectWrapperController) Init(cc *context.Context) {
+	ppp := make([]reflect.Value, 1)
+	ppp[0] = reflect.ValueOf(c.context)
+	method := c.vc.MethodByName("Init")
+	method.Call(ppp)
+}
 
-	//call the controller init function
-	method := vc.MethodByName("Init")
-	in := make([]reflect.Value, 1)
-	in[0] = reflect.ValueOf(context)
-	method.Call(in)
+func (c *reflectWrapperController) Context() *context.Context {
+	return c.context
+}
 
-	//call prepare function
-	in = make([]reflect.Value, 0)
-	method = vc.MethodByName("Prepare")
-	method.Call(in)
-
-	if match.CheckAuth {
-		passed := callBoolMethod(vc, "CheckAuth")
-		if !passed {
+func (c *reflectWrapperController) Get() {
+	if c.option.CrsfAny {
+		if !c.CheckCsrf() {
+			fmt.Printf("GET, checkcsrf return false\n")
 			return
 		}
 	}
+
+	c.callVoidMethod("Get")
+}
+
+func (c *reflectWrapperController) Delete() {
+	if !c.CheckAuth() {
+		fmt.Printf("CheckAuth return false\n")
+		return
+	}
+
+	if !c.CheckCsrf() {
+		return
+	}
+	c.callVoidMethod("Delete")
+}
+
+func (c *reflectWrapperController) Put() {
+	if !c.CheckAuth() {
+		fmt.Printf("CheckAuth return false\n")
+		return
+	}
+
+	if !c.CheckCsrf() {
+		return
+	}
+	c.callVoidMethod("Put")
+}
+
+func (c *reflectWrapperController) Post() {
+	if !c.CheckAuth() {
+		fmt.Printf("CheckAuth return false\n")
+		return
+	}
+
+	if !c.CheckCsrf() {
+		return
+	}
+	c.callVoidMethod("Post")
+}
+
+func (c *reflectWrapperController) Patch() {
+	c.callVoidMethod("Patch")
+}
+
+func (c *reflectWrapperController) Options() {
+	c.callVoidMethod("Options")
+}
+
+func (c *reflectWrapperController) Head() {
+	c.callVoidMethod("Head")
+}
+
+func (c *reflectWrapperController) CheckAuth() bool {
+	return c.callBoolMethod("CheckAuth")
+}
+func (c *reflectWrapperController) CheckCsrf() bool {
+	return c.callBoolMethod("CheckCsrf")
+}
+func (c *reflectWrapperController) Prepare() {
+	c.callVoidMethod("Prepare")
+}
+func (c *reflectWrapperController) Finish() {
+	c.callVoidMethod("Finish")
+}
+
+func (c *reflectWrapperController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("reflectWrapperController.ServeHTTP\n")
+	CallMatchedMethod(c)
+}
+
+func WrapperControllerHandler(vc reflect.Value, context *context.Context) *reflectWrapperController {
+	fmt.Printf("WrapperControllerHandler\n")
+	return &reflectWrapperController{vc: vc, context: context}
+}
+
+type WrapperController struct {
+	Controller
+}
+
+func (c *WrapperController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("WrapperController\n")
+	CallMatchedMethod(c.Controller)
+}
+
+func CallMatchedMethod(c Controller) {
+	fmt.Printf("CallMatchedMethod\n")
+	r := c.Context().R
+
+	c.Init(c.Context())
+	c.Prepare()
 
 	if r.Method == "GET" {
-		if match.CheckCsrf {
-			passed := callBoolMethod(vc, "CheckCsrf")
-			if !passed {
-				return
-			}
-		}
-		callVoidMethod(vc, "Get")
+		c.Get()
 	} else if r.Method == "HEAD" {
-		callVoidMethod(vc, "Head")
+		c.Head()
 	} else if r.Method == "DELETE" || (r.Method == "POST" && r.Form.Get("_method") == "delete") {
-		if !callBoolMethod(vc, "CheckCsrf") {
-			return
-		}
-		callVoidMethod(vc, "Delete")
+		c.Delete()
 	} else if r.Method == "PUT" || (r.Method == "POST" && r.Form.Get("_method") == "put") {
-		if !callBoolMethod(vc, "CheckCsrf") {
-			return
-		}
-		callVoidMethod(vc, "Put")
+		c.Put()
 	} else if r.Method == "POST" {
-		if !callBoolMethod(vc, "CheckCsrf") {
-			return
-		}
-		callVoidMethod(vc, "Post")
+		c.Post()
 	} else if r.Method == "PATCH" {
-		callVoidMethod(vc, "Patch")
+		c.Patch()
 	} else if r.Method == "OPTIONS" {
-		callVoidMethod(vc, "Options")
+		c.Options()
 	}
 
-	callVoidMethod(vc, "Finish")
+	c.Finish()
 }

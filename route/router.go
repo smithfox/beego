@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 	"path"
-	"reflect"
+	//"reflect"
 )
 
 type Router struct {
@@ -66,68 +66,48 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var match RouteMatch
 	var handler http.Handler
 	if r.Match(req, &match) {
-		handler = match.Handler
-		//controller := match.Controller
-
-		// setVars(req, match.Vars)
-		// setCurrentRoute(req, match.Route)
-	}
-
-	//{{处理 https和 http 的redirect
-	var redirectURL string = ""
-	if match.OnlyScheme == "http" && req.TLS != nil {
-		redirectURL = r.httphost + req.URL.Path
-	} else if match.OnlyScheme == "https" && req.TLS == nil {
-		redirectURL = r.httpshost + req.URL.Path
-	} else {
-		redirectURL = ""
-	}
-
-	if redirectURL != "" {
-		fmt.Printf("Router ServeHTTP redirectURL=%s, match.OnlyScheme=%s,req.TLS=%t\n", redirectURL, match.OnlyScheme, (req.TLS != nil))
-		http.Redirect(w, req, redirectURL, http.StatusMovedPermanently)
-		return
-	}
-	//}}
-
-	if match.Controller != nil {
-		/*
-			hc := &HandlerController{}
-			ccc := reflect.New(match.CType)
-			ddd := ccc.Elem().Interface().(ControllerInterface)
-			hc.ci = ddd //match.Controller
-
-			hc.context = &beecontext.Context{
-				W: w,
-				R: req,
-			}
-			//context.EnableGzip = EnableGzip
-			hc.context.EnableGzip = true
-			hc.context.Param = match.Vars
-			hc.ServerHTTP(w, req)
-		*/
-		context := &context.Context{
-			W:          w,
-			R:          req,
-			Param:      match.Vars,
-			EnableGzip: true,
+		fmt.Printf("router.ServHTTP, matched\n")
+		//{{处理 https和 http 的redirect
+		var redirectURL string = ""
+		if match.OnlyScheme == "http" && req.TLS != nil {
+			redirectURL = r.httphost + req.URL.Path
+		} else if match.OnlyScheme == "https" && req.TLS == nil {
+			redirectURL = r.httpshost + req.URL.Path
+		} else {
+			redirectURL = ""
 		}
 
-		controllerHTTP(&match, context)
-
-	} else {
-		if handler == nil {
-			if r.NotFoundHandler == nil {
-				r.NotFoundHandler = http.NotFoundHandler()
-			}
-			handler = r.NotFoundHandler
+		if redirectURL != "" {
+			fmt.Printf("Router ServeHTTP redirectURL=%s, match.OnlyScheme=%s,req.TLS=%t\n", redirectURL, match.OnlyScheme, (req.TLS != nil))
+			http.Redirect(w, req, redirectURL, http.StatusMovedPermanently)
+			return
 		}
-		handler.ServeHTTP(w, req)
+		//}}
+
+		if match.NewControllerHandler != nil {
+			context := &context.Context{W: w, R: req, Param: match.Vars, EnableGzip: true}
+			fmt.Printf("router.ServHTTP, new NewControllerHandler\n")
+			handler = match.NewControllerHandler(context)
+		} else {
+			handler = match.Handler
+		}
 	}
 
+	if handler == nil {
+		if r.NotFoundHandler == nil {
+			r.NotFoundHandler = http.NotFoundHandler()
+		}
+		handler = r.NotFoundHandler
+	}
+
+	handler.ServeHTTP(w, req)
 }
 
-func (r *Router) Controller(path string, c ControllerInterface) *RouteItem {
+func (r *Router) ControllerFunc(path string, f func() Controller) *RouteItem {
+	return r.NewRouteItem().Path(path).ControllerFunc(f)
+}
+
+func (r *Router) Controller(path string, c Controller) *RouteItem {
 	return r.NewRouteItem().Path(path).Controller(c)
 }
 
@@ -197,14 +177,13 @@ func (r *Router) Queries(pairs ...string) *RouteItem {
 
 // RouteMatch stores information about a matched route.
 type RouteMatch struct {
-	RouteItem  *RouteItem
-	Handler    http.Handler
-	Controller ControllerInterface
-	CType      reflect.Type
-	Vars       map[string]string
-	OnlyScheme string
-	CheckCsrf  bool
-	CheckAuth  bool
+	RouteItem            *RouteItem
+	Handler              http.Handler
+	NewControllerHandler NewControllerHandlerFunc
+	Vars                 map[string]string
+	OnlyScheme           string
+	CheckCsrf            bool
+	CheckAuth            bool
 }
 
 // ----------------------------------------------------------------------------
