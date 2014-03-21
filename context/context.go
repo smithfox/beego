@@ -14,12 +14,37 @@ type Context struct {
 	EnableGzip bool
 	Param      map[string]string
 	formParsed bool
-	//Status         int
+	written    bool
 }
 
-func (ctx *Context) Redirect(status int, localurl string) {
-	//ctx.Status = status
-	http.Redirect(ctx.W, ctx.R, localurl, status)
+//301
+//永久重定向,告诉客户端以后应从新地址访问,会影响SEO
+func (ctx *Context) RedirectPermanently(redirectURL string) {
+	http.Redirect(ctx.W, ctx.R, redirectURL, http.StatusMovedPermanently)
+	ctx.SetWritten()
+}
+
+//302
+//作为HTTP1.0的标准,以前叫做Moved Temporarily ,现在叫Found. 现在使用只是为了兼容性的处理
+//HTTP 1.1 有303 和307作为详细的补充,其实是对302的细化
+func (ctx *Context) RedirectFound(redirectURL string) {
+	http.Redirect(ctx.W, ctx.R, redirectURL, http.StatusFound)
+	ctx.SetWritten()
+}
+
+//303
+//对于POST请求，它表示请求已经被服务端处理，客户端可以接着使用GET方法去请求Location里的URI
+func (ctx *Context) RedirectSeeOther(redirectURL string) {
+	http.Redirect(ctx.W, ctx.R, redirectURL, http.StatusSeeOther)
+	ctx.SetWritten()
+}
+
+//307
+//对于POST请求，表示请求还没有被处理，客户端会向Location里的URI重新发起POST请求
+//意味着 POST 请求会被再次发送到服务端
+func (ctx *Context) RedirectTemporary(redirectURL string) {
+	http.Redirect(ctx.W, ctx.R, redirectURL, http.StatusTemporaryRedirect)
+	ctx.SetWritten()
 }
 
 func (ctx *Context) WriteString(content string) {
@@ -62,7 +87,7 @@ func (ctx *Context) GetForm() url.Values {
 }*/
 
 func (ctx *Context) GetString(key string) string {
-	return ctx.GetForm().Get(key)
+	return ctx.R.FormValue(key)
 }
 
 func (ctx *Context) GetStrings(key string) []string {
@@ -78,15 +103,15 @@ func (ctx *Context) GetStrings(key string) []string {
 }
 
 func (ctx *Context) GetInt(key string) (int64, error) {
-	return strconv.ParseInt(ctx.GetForm().Get(key), 10, 64)
+	return strconv.ParseInt(ctx.R.FormValue(key), 10, 64)
 }
 
 func (ctx *Context) GetBool(key string) (bool, error) {
-	return strconv.ParseBool(ctx.GetForm().Get(key))
+	return strconv.ParseBool(ctx.R.FormValue(key))
 }
 
 func (ctx *Context) GetFloat(key string) (float64, error) {
-	return strconv.ParseFloat(ctx.GetForm().Get(key), 64)
+	return strconv.ParseFloat(ctx.R.FormValue(key), 64)
 }
 
 func (ctx *Context) GetFile(key string) (multipart.File, *multipart.FileHeader, error) {
@@ -97,9 +122,11 @@ func (ctx *Context) GetHeader(key string) string {
 	return ctx.R.Header.Get(key)
 }
 
-func (ctx *Context) GetQuery(key string) string {
-	return ctx.R.Form.Get(key)
-}
+//
+// func (ctx *Context) GetQuery(key string) string {
+//实现有问题, 应该ctx.R.URL.Query().Get(key)
+// 	return ctx.R.Form.Get(key)
+// }
 
 func (ctx *Context) IsAjax() bool {
 	return ctx.GetHeader("X-Requested-With") == "XMLHttpRequest"

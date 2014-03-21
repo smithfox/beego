@@ -147,6 +147,7 @@ func NewManager(provideName, cookieName string, maxlifetime int64, savePath stri
 
 //get SessionCookie, is sid
 func (manager *Manager) GetSessionCookie(r *http.Request) (string, error) {
+	//	fmt.Printf("GetSessionCookie, manager.cookieName=%s\n", manager.cookieName)
 	cookie, err := r.Cookie(manager.cookieName)
 	if err != nil {
 		return "", err

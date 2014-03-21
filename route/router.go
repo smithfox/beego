@@ -2,49 +2,83 @@ package route
 
 import (
 	"fmt"
-	"github.com/smithfox/beego/context"
 	"github.com/smithfox/beego/recovery"
 	"log"
 	"net/http"
+	"net/url"
 	"path"
-	//"reflect"
+	"strings"
 )
+
+type FilterFunc func(http.ResponseWriter, *http.Request) bool
+
+func (f FilterFunc) FilterHTTP(w http.ResponseWriter, r *http.Request) bool {
+	return f(w, r)
+}
+
+type Filter interface {
+	FilterHTTP(http.ResponseWriter, *http.Request) bool
+}
 
 type Router struct {
 	// Configurable Handler to be used when no route matches.
 	NotFoundHandler http.Handler
 	// Routes to be matched, in order.
-	routes    []*RouteItem
+	routes    []RouteItem
 	filters   []Filter
 	httphost  string
 	httpshost string
+
+	services map[string]DatabusService
 }
 
 // NewRouter returns a new router instance.
 func NewRouter() *Router {
-	return &Router{}
+	router := &Router{services: make(map[string]DatabusService)}
+	return router
 }
 
 // NewRouter returns a new router instance.
 func NewRouterWithHost(httphost, httpshost string) *Router {
-	return &Router{httphost: httphost, httpshost: httpshost}
+	router := &Router{services: make(map[string]DatabusService)}
+	router.httphost = httphost
+	router.httpshost = httpshost
+
+	return router
 }
 
-func (r *Router) NewRouteItem() *RouteItem {
-	routeitem := &RouteItem{}
-	routeitem.strictSlash = true
+// func (r *Router) SetClassicMartini(mc *martini.ClassicMartini) {
+// 	r.mc = mc
+// }
+
+func (r *Router) newHandlerRouteItem() *HandlerRouteItem {
+	routeitem := &HandlerRouteItem{Router: r}
+	r.routes = append(r.routes, routeitem)
+	return routeitem
+}
+
+func (r *Router) newContextRouteItem() *ContextRouteItem {
+	routeitem := &ContextRouteItem{}
+	routeitem.Router = r
+	r.routes = append(r.routes, routeitem)
+	return routeitem
+}
+
+func (r *Router) newControllerRouteItem() *ControllerRouteItem {
+	routeitem := &ControllerRouteItem{}
+	routeitem.Router = r
 	r.routes = append(r.routes, routeitem)
 	return routeitem
 }
 
 // Match matches registered routes against the request.
-func (r *Router) Match(req *http.Request, match *RouteMatch) bool {
+func (r *Router) Match(req *http.Request) RouteItem {
 	for _, route := range r.routes {
-		if route.Match(req, match) {
-			return true
+		if route.Match(req) {
+			return route
 		}
 	}
-	return false
+	return nil
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -63,34 +97,43 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	var match RouteMatch
 	var handler http.Handler
-	if r.Match(req, &match) {
-		fmt.Printf("router.ServHTTP, matched\n")
+	routeitem := r.Match(req)
+	if routeitem != nil {
+		fmt.Printf("router.ServHTTP, matched for url=%v\n", req.URL)
 		//{{处理 https和 http 的redirect
-		var redirectURL string = ""
-		if match.OnlyScheme == "http" && req.TLS != nil {
-			redirectURL = r.httphost + req.URL.Path
-		} else if match.OnlyScheme == "https" && req.TLS == nil {
-			redirectURL = r.httpshost + req.URL.Path
-		} else {
-			redirectURL = ""
-		}
+		redirectURL := routeitem.GetRedirectURL(req)
 
 		if redirectURL != "" {
-			fmt.Printf("Router ServeHTTP redirectURL=%s, match.OnlyScheme=%s,req.TLS=%t\n", redirectURL, match.OnlyScheme, (req.TLS != nil))
-			http.Redirect(w, req, redirectURL, http.StatusMovedPermanently)
+			fmt.Printf("Router ServeHTTP redirectURL=%s\n", redirectURL)
+			http.Redirect(w, req, redirectURL, http.StatusSeeOther)
 			return
 		}
 		//}}
 
-		if match.NewControllerHandler != nil {
-			context := &context.Context{W: w, R: req, Param: match.Vars, EnableGzip: true}
-			fmt.Printf("router.ServHTTP, new NewControllerHandler\n")
-			handler = match.NewControllerHandler(context)
-		} else {
-			handler = match.Handler
+		//{{处理 RedirectSlash
+		if routeitem.RedirectSlash() {
+			p1 := strings.HasSuffix(req.URL.Path, "/")
+			n2 := routeitem.EndWithSlash()
+			if n2 <= 1 {
+				p2 := (n2 == 1)
+				if p1 != p2 {
+					u, _ := url.Parse(req.URL.String())
+					if p1 {
+						u.Path = u.Path[:len(u.Path)-1]
+					} else {
+						u.Path += "/"
+					}
+					fmt.Printf("Router ServeHTTP RedirectSlash redirectURL=%s\n", u.String())
+					//此处Redirect要用 307, 不能用301,302,303, 否则POST请求被改为了 GET
+					http.Redirect(w, req, u.String(), http.StatusTemporaryRedirect)
+					return
+				}
+			}
 		}
+		//}}
+
+		handler = routeitem.CreateHandler(w, req)
 	}
 
 	if handler == nil {
@@ -103,25 +146,41 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	handler.ServeHTTP(w, req)
 }
 
-func (r *Router) ControllerFunc(path string, f func() Controller) *RouteItem {
-	return r.NewRouteItem().Path(path).ControllerFunc(f)
+/*
+func (r *Router) MapDatabus(name string, f DatabusFunc) {
+	r.databuses[name] = f
+}
+*/
+func (r *Router) AddService(name string, s DatabusService) {
+	r.services[name] = s
 }
 
-func (r *Router) Controller(path string, c Controller) *RouteItem {
-	return r.NewRouteItem().Path(path).Controller(c)
+func (r *Router) Get(path string, v ContextHandler) *ContextRouteItem {
+	return r.newContextRouteItem().Path(path).Get(v)
+}
+
+func (r *Router) Post(path string, v ContextHandler) *ContextRouteItem {
+	return r.newContextRouteItem().Path(path).Post(v)
+}
+
+func (r *Router) ControllerFunc(path string, f func() Controller) *ControllerRouteItem {
+	return r.newControllerRouteItem().Path(path).ControllerFunc(f)
+}
+
+func (r *Router) Controller(path string, c Controller) *ControllerRouteItem {
+	return r.newControllerRouteItem().Path(path).Controller(c)
 }
 
 // Handle registers a new route with a matcher for the URL path.
-// See RouteItem.Path() and RouteItem.Handler().
-func (r *Router) Handle(path string, handler http.Handler) *RouteItem {
-	return r.NewRouteItem().Path(path).Handler(handler)
+func (r *Router) Handle(path string, handler http.Handler) *HandlerRouteItem {
+	return r.newHandlerRouteItem().Path(path).Handler(handler)
 }
 
 // HandleFunc registers a new route with a matcher for the URL path.
 // See Route.Path() and Route.HandlerFunc().
 func (r *Router) HandleFunc(path string, f func(http.ResponseWriter,
-	*http.Request)) *RouteItem {
-	return r.NewRouteItem().Path(path).HandlerFunc(f)
+	*http.Request)) *HandlerRouteItem {
+	return r.newHandlerRouteItem().Path(path).HandlerFunc(f)
 }
 
 func (r *Router) Filter(filter Filter) {
@@ -131,59 +190,6 @@ func (r *Router) Filter(filter Filter) {
 func (r *Router) FilterFunc(f func(http.ResponseWriter,
 	*http.Request) bool) {
 	r.Filter(FilterFunc(f))
-}
-
-// Headers registers a new route with a matcher for request header values.
-// See RouteItem.Headers().
-func (r *Router) Headers(pairs ...string) *RouteItem {
-	return r.NewRouteItem().Headers(pairs...)
-}
-
-// Host registers a new route with a matcher for the URL host.
-// See RouteItem.Host().
-func (r *Router) Host(tpl string) *RouteItem {
-	return r.NewRouteItem().Host(tpl)
-}
-
-// MatcherFunc registers a new route with a custom matcher function.
-// See RouteItem.MatcherFunc().
-func (r *Router) MatcherFunc(f MatcherFunc) *RouteItem {
-	return r.NewRouteItem().MatcherFunc(f)
-}
-
-// Methods registers a new route with a matcher for HTTP methods.
-// See RouteItem.Methods().
-func (r *Router) Methods(methods ...string) *RouteItem {
-	return r.NewRouteItem().Methods(methods...)
-}
-
-// Path registers a new route with a matcher for the URL path.
-// See RouteItem.Path().
-func (r *Router) Path(tpl string) *RouteItem {
-	return r.NewRouteItem().Path(tpl)
-}
-
-// PathPrefix registers a new route with a matcher for the URL path prefix.
-// See RouteItem.PathPrefix().
-func (r *Router) PathPrefix(tpl string) *RouteItem {
-	return r.NewRouteItem().PathPrefix(tpl)
-}
-
-// Queries registers a new route with a matcher for URL query values.
-// See RouteItem.Queries().
-func (r *Router) Queries(pairs ...string) *RouteItem {
-	return r.NewRouteItem().Queries(pairs...)
-}
-
-// RouteMatch stores information about a matched route.
-type RouteMatch struct {
-	RouteItem            *RouteItem
-	Handler              http.Handler
-	NewControllerHandler NewControllerHandlerFunc
-	Vars                 map[string]string
-	OnlyScheme           string
-	CheckCsrf            bool
-	CheckAuth            bool
 }
 
 // ----------------------------------------------------------------------------

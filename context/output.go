@@ -52,6 +52,7 @@ func (ctx *Context) Body(content []byte) {
 		/*	case io.WriteCloser:
 			output_writer.(io.WriteCloser).Close()*/
 	}
+	ctx.SetWritten()
 }
 
 /*
@@ -141,7 +142,7 @@ func (ctx *Context) Jsonp(data interface{}, hasIndent bool) error {
 		http.Error(ctx.W, err.Error(), http.StatusInternalServerError)
 		return err
 	}
-	callback := ctx.GetQuery("callback")
+	callback := ctx.GetString("callback")
 	if callback == "" {
 		return errors.New(`"callback" parameter required`)
 	}
@@ -179,6 +180,7 @@ func (ctx *Context) Download(file string) {
 	ctx.SetHeader("Cache-Control", "must-revalidate")
 	ctx.SetHeader("Pragma", "public")
 	http.ServeFile(ctx.W, ctx.R, file)
+	ctx.SetWritten()
 }
 
 func (ctx *Context) ContentType(ext string) {
@@ -193,7 +195,15 @@ func (ctx *Context) ContentType(ext string) {
 
 func (ctx *Context) SetStatus(status int) {
 	ctx.W.WriteHeader(status)
-	//	ctx.Status = status
+	ctx.SetWritten()
+}
+
+func (ctx *Context) SetWritten() {
+	ctx.written = true
+}
+
+func (ctx *Context) Written() bool {
+	return ctx.written
 }
 
 /*

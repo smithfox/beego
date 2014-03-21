@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
-	"net/url"
+	// "net/url"
 	"regexp"
 	"strings"
 )
@@ -23,7 +23,7 @@ import (
 // Previously we accepted only Python-like identifiers for variable
 // names ([a-zA-Z_][a-zA-Z0-9_]*), but currently the only restriction is that
 // name and pattern can't be empty, and names can't contain a colon.
-func newRouteRegexp(tpl string, matchHost, matchPrefix, strictSlash bool) (*routeRegexp, error) {
+func newRouteRegexp(tpl string, matchHost, matchPrefix, fuzzyMatchSlash bool) (*routeRegexp, error) {
 	// Check if it is well-formed.
 	idxs, errBraces := braceIndices(tpl)
 	if errBraces != nil {
@@ -35,14 +35,14 @@ func newRouteRegexp(tpl string, matchHost, matchPrefix, strictSlash bool) (*rout
 	defaultPattern := "[^/]+"
 	if matchHost {
 		defaultPattern = "[^.]+"
-		matchPrefix, strictSlash = false, false
+		matchPrefix, fuzzyMatchSlash = false, false
 	}
 	if matchPrefix {
-		strictSlash = false
+		fuzzyMatchSlash = false
 	}
-	// Set a flag for strictSlash.
+	// Set a flag for fuzzyMatchSlash.
 	endSlash := false
-	if strictSlash && strings.HasSuffix(tpl, "/") {
+	if fuzzyMatchSlash && strings.HasSuffix(tpl, "/") {
 		tpl = tpl[:len(tpl)-1]
 		endSlash = true
 	}
@@ -81,7 +81,7 @@ func newRouteRegexp(tpl string, matchHost, matchPrefix, strictSlash bool) (*rout
 	// Add the remaining.
 	raw := tpl[end:]
 	pattern.WriteString(regexp.QuoteMeta(raw))
-	if strictSlash {
+	if fuzzyMatchSlash {
 		pattern.WriteString("[/]?")
 	}
 	if !matchPrefix {
@@ -125,7 +125,7 @@ type routeRegexp struct {
 }
 
 // Match matches the regexp against the URL host or path.
-func (r *routeRegexp) Match(req *http.Request, match *RouteMatch) bool {
+func (r *routeRegexp) Match(req *http.Request) bool {
 	if !r.matchHost {
 		return r.regexp.MatchString(req.URL.Path)
 	}
@@ -198,13 +198,13 @@ type routeRegexpGroup struct {
 }
 
 // setMatch extracts the variables from the URL once a route matches.
-func (v *routeRegexpGroup) setMatch(req *http.Request, m *RouteMatch, r *RouteItem) {
+func (v *routeRegexpGroup) setMatch(req *http.Request, routeParams RouteParams) {
 	// Store host variables.
 	if v.host != nil {
 		hostVars := v.host.regexp.FindStringSubmatch(getHost(req))
 		if hostVars != nil {
 			for k, v := range v.host.varsN {
-				m.Vars[v] = hostVars[k+1]
+				routeParams[v] = hostVars[k+1]
 			}
 		}
 	}
@@ -213,21 +213,7 @@ func (v *routeRegexpGroup) setMatch(req *http.Request, m *RouteMatch, r *RouteIt
 		pathVars := v.path.regexp.FindStringSubmatch(req.URL.Path)
 		if pathVars != nil {
 			for k, v := range v.path.varsN {
-				m.Vars[v] = pathVars[k+1]
-			}
-			// Check if we should redirect.
-			if r.strictSlash {
-				p1 := strings.HasSuffix(req.URL.Path, "/")
-				p2 := strings.HasSuffix(v.path.template, "/")
-				if p1 != p2 {
-					u, _ := url.Parse(req.URL.String())
-					if p1 {
-						u.Path = u.Path[:len(u.Path)-1]
-					} else {
-						u.Path += "/"
-					}
-					m.Handler = http.RedirectHandler(u.String(), 301)
-				}
+				routeParams[v] = pathVars[k+1]
 			}
 		}
 	}
