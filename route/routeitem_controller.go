@@ -1,7 +1,7 @@
 package route
 
 import (
-	"fmt"
+	//"fmt"
 	"github.com/smithfox/beego/context"
 	"net/http"
 	"reflect"
@@ -20,7 +20,7 @@ func (r *ControllerRouteItem) Path(tpl string) *ControllerRouteItem {
 func (r *ControllerRouteItem) CreateHandler(w http.ResponseWriter, req *http.Request) http.Handler {
 	routeParams := r.GetRouteParams(req)
 	context := &context.Context{W: w, R: req, Param: routeParams, EnableGzip: true}
-	fmt.Printf("ControllerRouteItem\n")
+	//fmt.Printf("ControllerRouteItem\n")
 	return r.createCtrlHandler(context)
 }
 
@@ -29,7 +29,7 @@ func (r *ControllerRouteItem) ControllerFunc(f func() Controller) *ControllerRou
 		//默认 controller 都是 http, 可以通过 OnlyScheme() 来改变
 		r.onlyscheme = "http"
 		r.createCtrlHandler = func(c *context.Context) ControllerHandler {
-			fmt.Printf("RouteItem.createCtrlHandler\n")
+			//fmt.Printf("RouteItem.createCtrlHandler\n")
 			ci := f()
 			ci.Init(c)
 			return &WrapperController{Controller: ci}
@@ -97,7 +97,7 @@ type WrapperController struct {
 }
 
 func (c *WrapperController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("WrapperController.ServeHTTP, method=%s\n", r.Method)
+	//fmt.Printf("WrapperController.ServeHTTP, method=%s\n", r.Method)
 	CallMatchedMethod(c.Controller)
 }
 

@@ -100,12 +100,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var handler http.Handler
 	routeitem := r.Match(req)
 	if routeitem != nil {
-		fmt.Printf("router.ServHTTP, matched for url=%v\n", req.URL)
+		//fmt.Printf("router.ServHTTP, matched for url=%v\n", req.URL)
 		//{{处理 https和 http 的redirect
 		redirectURL := routeitem.GetRedirectURL(req)
 
 		if redirectURL != "" {
-			fmt.Printf("Router ServeHTTP redirectURL=%s\n", redirectURL)
+			//fmt.Printf("Router ServeHTTP redirectURL=%s\n", redirectURL)
 			http.Redirect(w, req, redirectURL, http.StatusSeeOther)
 			return
 		}
@@ -124,7 +124,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 					} else {
 						u.Path += "/"
 					}
-					fmt.Printf("Router ServeHTTP RedirectSlash redirectURL=%s\n", u.String())
+					//fmt.Printf("Router ServeHTTP RedirectSlash redirectURL=%s\n", u.String())
 					//此处Redirect要用 307, 不能用301,302,303, 否则POST请求被改为了 GET
 					http.Redirect(w, req, u.String(), http.StatusTemporaryRedirect)
 					return

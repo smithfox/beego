@@ -20,7 +20,7 @@ func (r *ContextRouteItem) Path(tpl string) *ContextRouteItem {
 func (r *ContextRouteItem) CreateHandler(w http.ResponseWriter, req *http.Request) http.Handler {
 	routeParams := r.GetRouteParams(req)
 	context := &context.Context{W: w, R: req, Param: routeParams, EnableGzip: true}
-	fmt.Printf("ContextRouteItem\n")
+	//fmt.Printf("ContextRouteItem\n")
 	return r.createCtxHandler(r.Router.services, context)
 }
 
@@ -35,7 +35,7 @@ func (r *ContextRouteItem) action(f ContextHandler) {
 	rt = rt.Elem()
 
 	r.createCtxHandler = func(services map[string]DatabusService, ctx *context.Context) http.Handler {
-		fmt.Printf("RouteItem.createCtxHandler\n")
+		//fmt.Printf("RouteItem.createCtxHandler\n")
 		vc := reflect.New(rt)
 		ci := vc.Interface()
 		bus := WrapperBusValue(vc)
@@ -93,7 +93,7 @@ type WrapperContextHandler struct {
 
 func (c *WrapperContextHandler) RunBus() {
 	for _, name := range c.bus.Fields() {
-		fmt.Printf("RunBus, name=%s\n", name)
+		//fmt.Printf("RunBus, name=%s\n", name)
 		service, _ := c.services[name]
 		if service != nil {
 			service(c.context, c.bus)
@@ -104,7 +104,7 @@ func (c *WrapperContextHandler) RunBus() {
 }
 
 func (c *WrapperContextHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("WrapperContextHandler.ServeHTTP\n")
+	//fmt.Printf("WrapperContextHandler.ServeHTTP\n")
 	c.RunBus()
 	c.handler.ServeContext(c.context)
 }
