@@ -165,3 +165,11 @@ func (ctx *Context) GetURLRouterParam(key string) string {
 	}
 	return ""
 }
+
+func (ctx *Context) DecodeForm(dst interface{}) error {
+	return gGorillaDecoder.Decode(dst, ctx.GetForm())
+}
+
+func (ctx *Context) DecodePostForm(dst interface{}) error {
+	return gGorillaDecoder.Decode(dst, ctx.GetPostForm())
+}
