@@ -81,9 +81,9 @@ func (r *HandlerRouteItem) GetRedirectURL(req *http.Request) string {
 	//{{处理 https和 http 的redirect
 	var redirectURL string = ""
 	if r.onlyscheme == "http" && req.TLS != nil {
-		redirectURL = r.Router.httphost + req.URL.Path
+		redirectURL = r.Router.httphost + req.RequestURI
 	} else if r.onlyscheme == "https" && req.TLS == nil {
-		redirectURL = r.Router.httpshost + req.URL.Path
+		redirectURL = r.Router.httpshost + req.RequestURI
 	} else {
 		redirectURL = ""
 	}
