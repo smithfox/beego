@@ -137,7 +137,7 @@ func NewManager(provideName, cookieName string, maxlifetime int64, savePath stri
 	return &Manager{
 		provider:      provider,
 		cookieName:    cookieName,
-		extCookieName: "eds",
+		extCookieName: "eds1",
 		maxlifetime:   maxlifetime,
 		domain:        domain,
 		hashfunc:      hashfunc,
@@ -160,7 +160,7 @@ func (manager *Manager) GetSessionCookie(r *http.Request) (string, error) {
 
 //set session cookie
 func (manager *Manager) SetSessionCookie(w http.ResponseWriter, sid string) {
-	manager.DeleteOldSessionCookie(w)
+	manager._deleteOldSessionCookie(w)
 
 	cookie := &http.Cookie{
 		Name:     manager.cookieName,
@@ -177,10 +177,11 @@ func (manager *Manager) SetSessionCookie(w http.ResponseWriter, sid string) {
 	http.SetCookie(w, cookie)
 }
 
-func (manager *Manager) DeleteOldSessionCookie(w http.ResponseWriter) {
-	expiration := time.Now()
+func (manager *Manager) _deleteOldSessionCookie(w http.ResponseWriter) {
+	expiration := time.Now().AddDate(-1, 0, 0)
+
 	cookie := http.Cookie{
-		Name:     manager.cookieName,
+		Name:     "nsxnid",
 		Path:     "/",
 		Domain:   "www.dota2sp.com",
 		HttpOnly: true,
@@ -191,7 +192,8 @@ func (manager *Manager) DeleteOldSessionCookie(w http.ResponseWriter) {
 
 //delete session cookie
 func (manager *Manager) DeleteSessionCookie(w http.ResponseWriter) {
-	expiration := time.Now()
+	manager._deleteOldSessionCookie(w)
+	expiration := time.Now().AddDate(-1, 0, 0)
 	cookie := http.Cookie{
 		Name:     manager.cookieName,
 		Path:     "/",
@@ -200,15 +202,6 @@ func (manager *Manager) DeleteSessionCookie(w http.ResponseWriter) {
 		Expires:  expiration,
 		MaxAge:   -1}
 	http.SetCookie(w, &cookie)
-
-	cookie1 := http.Cookie{
-		Name:     manager.cookieName,
-		Path:     "/",
-		Domain:   "www.dota2sp.com",
-		HttpOnly: true,
-		Expires:  expiration,
-		MaxAge:   -1}
-	http.SetCookie(w, &cookie1)
 }
 
 //get extra session cookie: IP, UID
@@ -240,7 +233,7 @@ func (manager *Manager) GetSessionExtCookie(r *http.Request) (string, string, er
 
 //set extra session cookie: IP, UID
 func (manager *Manager) SetSessionExtCookie(w http.ResponseWriter, IP string, UID string) {
-	manager.DeleteOldSessionExtCookie(w)
+	manager._deleteOldSessionExtCookie(w)
 
 	value := fmt.Sprintf("%s,%s", IP, UID)
 	bb := []byte(value)
@@ -264,10 +257,10 @@ func (manager *Manager) SetSessionExtCookie(w http.ResponseWriter, IP string, UI
 	http.SetCookie(w, cookie)
 }
 
-func (manager *Manager) DeleteOldSessionExtCookie(w http.ResponseWriter) {
-	expiration := time.Now()
+func (manager *Manager) _deleteOldSessionExtCookie(w http.ResponseWriter) {
+	expiration := time.Now().AddDate(-1, 0, 0)
 	cookie := http.Cookie{
-		Name:     manager.extCookieName,
+		Name:     "eds",
 		Path:     "/",
 		Domain:   "www.dota2sp.com",
 		HttpOnly: true,
@@ -278,7 +271,9 @@ func (manager *Manager) DeleteOldSessionExtCookie(w http.ResponseWriter) {
 
 //delete extra session cookie: IP, UID
 func (manager *Manager) DeleteSessionExtCookie(w http.ResponseWriter) {
-	expiration := time.Now()
+	manager._deleteOldSessionExtCookie(w)
+
+	expiration := time.Now().AddDate(-1, 0, 0)
 	cookie := http.Cookie{
 		Name:     manager.extCookieName,
 		Path:     "/",
@@ -287,14 +282,6 @@ func (manager *Manager) DeleteSessionExtCookie(w http.ResponseWriter) {
 		Expires:  expiration,
 		MaxAge:   -1}
 	http.SetCookie(w, &cookie)
-	cookie1 := http.Cookie{
-		Name:     manager.extCookieName,
-		Path:     "/",
-		Domain:   "www.dota2sp.com",
-		HttpOnly: true,
-		Expires:  expiration,
-		MaxAge:   -1}
-	http.SetCookie(w, &cookie1)
 }
 
 //get Session By sessionId
