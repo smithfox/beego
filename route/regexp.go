@@ -129,7 +129,13 @@ func (r *routeRegexp) Match(req *http.Request) bool {
 	if !r.matchHost {
 		return r.regexp.MatchString(req.URL.Path)
 	}
-	return r.regexp.MatchString(getHost(req))
+	host := getHost(req)
+	//fmt.Printf("@@@@@@@ matchhost, template=%v, host=%v\n", r.template, host)
+	if r.template == host {
+		return true
+	} else {
+		return r.regexp.MatchString(host)
+	}
 }
 
 // url builds a URL part using the given values.
