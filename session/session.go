@@ -72,6 +72,7 @@ type Manager struct {
 	extCookieName string //cookie session token extend info: IP, UID
 	provider      Provider
 	maxlifetime   int64
+	domain        string
 	//options     []interface{}
 
 	//cache options setting
@@ -88,7 +89,7 @@ type Manager struct {
 //2. hashfunc  default sha1
 //3. hashkey default beegosessionkey
 //4. maxage default is none
-func NewManager(provideName, cookieName string, maxlifetime int64, savePath string, options ...interface{}) (*Manager, error) {
+func NewManager(provideName, cookieName string, maxlifetime int64, savePath string, domain string, options ...interface{}) (*Manager, error) {
 	provider, ok := provides[provideName]
 	if !ok {
 		return nil, fmt.Errorf("session: unknown provide %q (forgotten import?)", provideName)
@@ -138,6 +139,7 @@ func NewManager(provideName, cookieName string, maxlifetime int64, savePath stri
 		cookieName:    cookieName,
 		extCookieName: "eds",
 		maxlifetime:   maxlifetime,
+		domain:        domain,
 		hashfunc:      hashfunc,
 		hashkey:       hashkey,
 		maxage:        maxage,
@@ -162,6 +164,7 @@ func (manager *Manager) SetSessionCookie(w http.ResponseWriter, sid string) {
 		Name:     manager.cookieName,
 		Value:    sid,
 		Path:     "/",
+		Domain:   manager.domain,
 		HttpOnly: true,
 		Secure:   manager.secure}
 	if manager.maxage >= 0 {
@@ -177,6 +180,7 @@ func (manager *Manager) DeleteSessionCookie(w http.ResponseWriter) {
 	cookie := http.Cookie{
 		Name:     manager.cookieName,
 		Path:     "/",
+		Domain:   manager.domain,
 		HttpOnly: true,
 		Expires:  expiration,
 		MaxAge:   -1}
@@ -224,6 +228,7 @@ func (manager *Manager) SetSessionExtCookie(w http.ResponseWriter, IP string, UI
 		Name:     manager.extCookieName,
 		Value:    value,
 		Path:     "/",
+		Domain:   manager.domain,
 		HttpOnly: true,
 		Secure:   manager.secure}
 	if manager.maxage >= 0 {
@@ -239,6 +244,7 @@ func (manager *Manager) DeleteSessionExtCookie(w http.ResponseWriter) {
 	cookie := http.Cookie{
 		Name:     manager.extCookieName,
 		Path:     "/",
+		Domain:   manager.domain,
 		HttpOnly: true,
 		Expires:  expiration,
 		MaxAge:   -1}
