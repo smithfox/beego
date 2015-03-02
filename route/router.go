@@ -24,26 +24,32 @@ type Router struct {
 	// Configurable Handler to be used when no route matches.
 	NotFoundHandler http.Handler
 	// Routes to be matched, in order.
-	routes    []RouteItem
-	filters   []Filter
-	httphost  string
-	httpshost string
-
-	services map[string]DatabusService
+	routes                 []RouteItem
+	filters                []Filter
+	httphost               string
+	httpshost              string
+	enable_scheme_redirect bool
+	EnableGzip             bool
+	services               map[string]DatabusService
 }
 
 // NewRouter returns a new router instance.
-func NewRouter() *Router {
+func NewRouter(enable_gzip bool) *Router {
 	router := &Router{services: make(map[string]DatabusService)}
+	router.EnableGzip = enable_gzip
 	return router
 }
 
 // NewRouter returns a new router instance.
-func NewRouterWithHost(httphost, httpshost string) *Router {
+func NewRouterWithHost(httphost, httpshost string, enable_scheme_redirect bool, enable_gzip bool) *Router {
 	router := &Router{services: make(map[string]DatabusService)}
+	router.EnableGzip = enable_gzip
 	router.httphost = httphost
 	router.httpshost = httpshost
-
+	if router.httphost == router.httpshost {
+		enable_scheme_redirect = false
+	}
+	router.enable_scheme_redirect = enable_scheme_redirect
 	return router
 }
 
@@ -102,7 +108,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if routeitem != nil {
 		//fmt.Printf("router.ServHTTP, matched for url=%v\n", req.URL)
 		//{{处理 https和 http 的redirect
-		redirectURL := routeitem.GetRedirectURL(req)
+		redirectURL := routeitem.GetSchemeRedirectURL(req)
 
 		if redirectURL != "" {
 			//fmt.Printf("Router ServeHTTP redirectURL=%s\n", redirectURL)

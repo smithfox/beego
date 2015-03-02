@@ -19,29 +19,24 @@ func (ctx *Context) SetHeader(key, val string) {
 	ctx.W.Header().Set(key, val)
 }
 
-func (ctx *Context) Body(content []byte) {
+func (ctx *Context) write_gzip(content []byte) {
 	output_writer := ctx.W.(io.Writer)
-	if ctx.EnableGzip == true && ctx.GetHeader("Accept-Encoding") != "" {
-		splitted := strings.SplitN(ctx.GetHeader("Accept-Encoding"), ",", -1)
-		encodings := make([]string, len(splitted))
+	splitted := strings.SplitN(ctx.GetHeader("Accept-Encoding"), ",", -1)
+	encodings := make([]string, len(splitted))
 
-		for i, val := range splitted {
-			encodings[i] = strings.TrimSpace(val)
+	for i, val := range splitted {
+		encodings[i] = strings.TrimSpace(val)
+	}
+	for _, val := range encodings {
+		if val == "gzip" {
+			ctx.SetHeader("Content-Encoding", "gzip")
+			output_writer, _ = gzip.NewWriterLevel(ctx.W, gzip.BestSpeed)
+			break
+		} else if val == "deflate" {
+			ctx.SetHeader("Content-Encoding", "deflate")
+			output_writer, _ = flate.NewWriter(ctx.W, flate.BestSpeed)
+			break
 		}
-		for _, val := range encodings {
-			if val == "gzip" {
-				ctx.SetHeader("Content-Encoding", "gzip")
-				output_writer, _ = gzip.NewWriterLevel(ctx.W, gzip.BestSpeed)
-
-				break
-			} else if val == "deflate" {
-				ctx.SetHeader("Content-Encoding", "deflate")
-				output_writer, _ = flate.NewWriter(ctx.W, flate.BestSpeed)
-				break
-			}
-		}
-	} else {
-		ctx.SetHeader("Content-Length", strconv.Itoa(len(content)))
 	}
 	output_writer.Write(content)
 	switch output_writer.(type) {
@@ -51,6 +46,19 @@ func (ctx *Context) Body(content []byte) {
 		output_writer.(*flate.Writer).Close()
 		/*	case io.WriteCloser:
 			output_writer.(io.WriteCloser).Close()*/
+	}
+}
+
+func (ctx *Context) write(content []byte) {
+	ctx.SetHeader("Content-Length", strconv.Itoa(len(content)))
+	ctx.W.Write(content)
+}
+
+func (ctx *Context) Body(content []byte) {
+	if ctx.EnableGzip == true && ctx.GetHeader("Accept-Encoding") != "" {
+		ctx.write_gzip(content)
+	} else {
+		ctx.write(content)
 	}
 	ctx.SetWritten()
 }

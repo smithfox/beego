@@ -26,7 +26,7 @@ const (
 //模糊匹配, 但不redirect
 
 type RouteItem interface {
-	GetRedirectURL(req *http.Request) string
+	GetSchemeRedirectURL(req *http.Request) string
 	SetSlashOption(int)
 	ExactMatchSlash() bool
 	RedirectSlash() bool

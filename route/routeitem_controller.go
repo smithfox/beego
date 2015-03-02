@@ -19,7 +19,7 @@ func (r *ControllerRouteItem) Path(tpl string) *ControllerRouteItem {
 
 func (r *ControllerRouteItem) CreateHandler(w http.ResponseWriter, req *http.Request) http.Handler {
 	routeParams := r.GetRouteParams(req)
-	context := &context.Context{W: w, R: req, Param: routeParams, EnableGzip: true}
+	context := &context.Context{W: w, R: req, Param: routeParams, EnableGzip: r.Router.EnableGzip}
 	//fmt.Printf("ControllerRouteItem\n")
 	return r.createCtrlHandler(context)
 }

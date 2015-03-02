@@ -9,22 +9,24 @@ import (
 )
 
 var (
-	AppName       string
-	AppPath       string
-	AppConfigPath string
-	TemplateCache map[string]*template.Template
-	HttpAddr      string
-	HttpPort      int
-	HttpsPort     int
-	HttpTLS       bool
-	HttpCertFile  string
-	HttpKeyFile   string
-	RecoverPanic  bool
-	AutoRender    bool
-	PprofOn       bool
-	ViewsPath     string
-	RunMode       string //"dev" or "prod"
-	AppConfig     config.ConfigContainer
+	AppName           string
+	AppPath           string
+	AppConfigPath     string
+	TemplateCache     map[string]*template.Template
+	HttpAddr          string
+	HttpPort          int
+	HttpsPort         int
+	HttpsListen       bool
+	HttpsExposeURL    bool
+	HttpsRedirectOnly bool
+	HttpsCertFile     string
+	HttpsKeyFile      string
+	RecoverPanic      bool
+	AutoRender        bool
+	PprofOn           bool
+	ViewsPath         string
+	RunMode           string //"dev" or "prod"
+	AppConfig         config.ConfigContainer
 	//related to session
 	SessionOn            bool   // whether auto start session,default is false
 	SessionProvider      string // default session provider  memory mysql redis
@@ -32,8 +34,8 @@ var (
 	SessionGCMaxLifetime int64  // session's gc maxlifetime
 	SessionSavePath      string // session savepath if use mysql/redis/file this set to the connectinfo
 
-	MaxMemory         int64
-	EnableGzip        bool   // enable gzip
+	MaxMemory int64
+	// EnableGzip        bool   // enable gzip
 	DirectoryIndex    bool   //enable DirectoryIndex default is false
 	HttpServerTimeOut int64  //set httpserver timeout
 	ErrorsShow        bool   //set weather show errors
@@ -42,6 +44,7 @@ var (
 	XSRFExpire        int
 	TemplateLeft      string
 	TemplateRight     string
+	FastCGI           bool //fast cgi mode
 )
 
 func init() {
@@ -62,7 +65,7 @@ func init() {
 	SessionGCMaxLifetime = 3600
 	SessionSavePath = ""
 	MaxMemory = 1 << 26 //64MB
-	EnableGzip = false
+	// EnableGzip = false
 	AppConfigPath = path.Join(AppPath, "conf", "app.conf")
 	HttpServerTimeOut = 0
 	ErrorsShow = true
@@ -70,6 +73,7 @@ func init() {
 	XSRFExpire = 0
 	TemplateLeft = "{{"
 	TemplateRight = "}}"
+	FastCGI = false
 	//ParseConfig()
 	//runtime.GOMAXPROCS(runtime.NumCPU())
 }
@@ -86,17 +90,23 @@ func ParseConfig() (err error) {
 		if timeout, err := AppConfig.Int64("http.servertimeout"); err == nil {
 			HttpServerTimeOut = timeout
 		}
-		if httptls, err := AppConfig.Bool("https"); err == nil {
-			HttpTLS = httptls
+		if httptls, err := AppConfig.Bool("https.listen"); err == nil {
+			HttpsListen = httptls
 		}
 		if v, err := AppConfig.Int("https.port"); err == nil {
 			HttpsPort = v
 		}
 		if certfile := AppConfig.String("https.certfile"); certfile != "" {
-			HttpCertFile = certfile
+			HttpsCertFile = certfile
 		}
 		if keyfile := AppConfig.String("https.keyfile"); keyfile != "" {
-			HttpKeyFile = keyfile
+			HttpsKeyFile = keyfile
+		}
+		if exposeurl, err := AppConfig.Bool("https.expose_url"); err == nil {
+			HttpsExposeURL = exposeurl
+		}
+		if redirectonly, err := AppConfig.Bool("https.redirect_only"); err == nil {
+			HttpsRedirectOnly = redirectonly
 		}
 		if sessionon, err := AppConfig.Bool("session"); err == nil {
 			SessionOn = sessionon
@@ -133,10 +143,11 @@ func ParseConfig() (err error) {
 		if views := AppConfig.String("viewspath"); views != "" {
 			ViewsPath = views
 		}
-
-		if enablegzip, err := AppConfig.Bool("gzip"); err == nil {
-			EnableGzip = enablegzip
-		}
+		/*
+			if enablegzip, err := AppConfig.Bool("gzip"); err == nil {
+				EnableGzip = enablegzip
+			}
+		*/
 		if directoryindex, err := AppConfig.Bool("directoryindex"); err == nil {
 			DirectoryIndex = directoryindex
 		}
@@ -161,7 +172,9 @@ func ParseConfig() (err error) {
 		if tplright := AppConfig.String("templateright"); tplright != "" {
 			TemplateRight = tplright
 		}
-
+		if fastcgi, err := AppConfig.Bool("fastcgi"); err == nil {
+			FastCGI = fastcgi
+		}
 	}
 	return nil
 }

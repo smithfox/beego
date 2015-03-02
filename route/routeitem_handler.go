@@ -77,8 +77,11 @@ func (r *HandlerRouteItem) BuildOnly() *HandlerRouteItem {
 	return r
 }
 
-func (r *HandlerRouteItem) GetRedirectURL(req *http.Request) string {
-	//{{处理 https和 http 的redirect
+func (r *HandlerRouteItem) GetSchemeRedirectURL(req *http.Request) string {
+	if !r.Router.enable_scheme_redirect {
+		return ""
+	}
+
 	var redirectURL string = ""
 	if r.onlyscheme == "http" && req.TLS != nil {
 		redirectURL = r.Router.httphost + req.RequestURI
