@@ -44,7 +44,7 @@ var (
 	XSRFExpire        int
 	TemplateLeft      string
 	TemplateRight     string
-	FastCGI           bool //fast cgi mode
+	ProxyBackend      bool //被代理模式
 )
 
 func init() {
@@ -73,7 +73,7 @@ func init() {
 	XSRFExpire = 0
 	TemplateLeft = "{{"
 	TemplateRight = "}}"
-	FastCGI = false
+	ProxyBackend = false
 	//ParseConfig()
 	//runtime.GOMAXPROCS(runtime.NumCPU())
 }
@@ -172,8 +172,8 @@ func ParseConfig() (err error) {
 		if tplright := AppConfig.String("templateright"); tplright != "" {
 			TemplateRight = tplright
 		}
-		if fastcgi, err := AppConfig.Bool("fastcgi"); err == nil {
-			FastCGI = fastcgi
+		if proxy_backend, err := AppConfig.Bool("proxy_backend"); err == nil {
+			ProxyBackend = proxy_backend
 		}
 	}
 	return nil

@@ -24,13 +24,13 @@ type Router struct {
 	// Configurable Handler to be used when no route matches.
 	NotFoundHandler http.Handler
 	// Routes to be matched, in order.
-	routes                 []RouteItem
-	filters                []Filter
-	httphost               string
-	httpshost              string
-	enable_scheme_redirect bool
-	EnableGzip             bool
-	services               map[string]DatabusService
+	routes          []RouteItem
+	filters         []Filter
+	httphost        string
+	httpshost       string
+	enable_to_https bool //是否允许重定向到 https
+	EnableGzip      bool
+	services        map[string]DatabusService
 }
 
 // NewRouter returns a new router instance.
@@ -41,15 +41,15 @@ func NewRouter(enable_gzip bool) *Router {
 }
 
 // NewRouter returns a new router instance.
-func NewRouterWithHost(httphost, httpshost string, enable_scheme_redirect bool, enable_gzip bool) *Router {
+func NewRouterWithHost(httphost, httpshost string, enable_to_https bool, enable_gzip bool) *Router {
 	router := &Router{services: make(map[string]DatabusService)}
 	router.EnableGzip = enable_gzip
 	router.httphost = httphost
 	router.httpshost = httpshost
 	if router.httphost == router.httpshost {
-		enable_scheme_redirect = false
+		enable_to_https = false
 	}
-	router.enable_scheme_redirect = enable_scheme_redirect
+	router.enable_to_https = enable_to_https
 	return router
 }
 

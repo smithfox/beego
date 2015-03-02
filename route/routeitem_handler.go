@@ -78,14 +78,15 @@ func (r *HandlerRouteItem) BuildOnly() *HandlerRouteItem {
 }
 
 func (r *HandlerRouteItem) GetSchemeRedirectURL(req *http.Request) string {
-	if !r.Router.enable_scheme_redirect {
-		return ""
+	var is_https_req bool = (req.TLS != nil)
+	if "https" == req.Header.Get("X-Scheme") {
+		is_https_req = true
 	}
 
 	var redirectURL string = ""
-	if r.onlyscheme == "http" && req.TLS != nil {
+	if r.onlyscheme == "http" && is_https_req {
 		redirectURL = r.Router.httphost + req.RequestURI
-	} else if r.onlyscheme == "https" && req.TLS == nil {
+	} else if r.onlyscheme == "https" && !is_https_req && r.Router.enable_to_https {
 		redirectURL = r.Router.httpshost + req.RequestURI
 	} else {
 		redirectURL = ""
