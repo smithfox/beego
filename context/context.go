@@ -141,7 +141,21 @@ func (ctx *Context) IsUpload() bool {
 }
 
 func (ctx *Context) Proxy() []string {
-	if ips := ctx.GetHeader("HTTP_X_FORWARDED_FOR"); ips != "" {
+	var ips string = ""
+	ips = ctx.GetHeader("X-Real-IP")
+	if len(ips) < 7 {
+		ips = ctx.GetHeader("X-Forwarded-For")
+		if len(ips) < 7 {
+			ips = ctx.GetHeader("HTTP_X_FORWARDED_FOR")
+			if len(ips) < 7 {
+				ips = ctx.GetHeader("Proxy-Client-IP")
+				if len(ips) < 7 {
+					ips = ctx.GetHeader("WL-Proxy-Client-IP")
+				}
+			}
+		}
+	}
+	if ips != "" {
 		return strings.Split(ips, ",")
 	}
 	return []string{}
@@ -152,9 +166,11 @@ func (ctx *Context) IP() string {
 	if len(ips) > 0 && ips[0] != "" {
 		return ips[0]
 	}
-	ip := strings.Split(ctx.R.RemoteAddr, ":")
-	if len(ip) == 2 {
-		return ip[0]
+	ips = strings.Split(ctx.R.RemoteAddr, ":")
+	if len(ips) == 2 {
+		return ips[0]
+	} else if len(ips) == 1 {
+		return ips[0]
 	}
 	return "127.0.0.1"
 }
