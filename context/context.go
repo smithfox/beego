@@ -91,11 +91,11 @@ func (ctx *Context) GetString(key string) string {
 }
 
 func (ctx *Context) GetStrings(key string) []string {
-	r := ctx.R
-	if r.Form == nil {
+	f := ctx.GetForm()
+	if f == nil {
 		return []string{}
 	}
-	vs := r.Form[key]
+	vs := f[key]
 	if len(vs) > 0 {
 		return vs
 	}
